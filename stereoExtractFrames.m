@@ -9,7 +9,7 @@
 function stereoExtractFrames(vidFileL,vidFileR,offsetR,timecodeListFile,frameRate)
 
 % make sure frame rate is appropriate
-if( (frameRate ~= 29.97) && (frameRate ~= 59.97))
+if( (frameRate ~= 29.97) && (frameRate ~= 59.94))
     error('Unsupported frame rate, this only works for 29.97Hz and 59.94Hz');
 end
 
@@ -19,6 +19,13 @@ timecodeData = textscan(fid,'%s');
 fclose(fid);
 timecodeData = timecodeData{1};
 
+% make L and R directories for image files
+if(~isfolder('L'))
+    mkdir('L');
+end
+if(~isfolder('R'))
+    mkdir('R');
+end
 
 % extract each stereo pair
 for snapIdx = 1:length(timecodeData)
@@ -37,9 +44,12 @@ for snapIdx = 1:length(timecodeData)
     flatTimecodeL = constRateTimecode(frameNumL,frameRate);
     flatTimecodeR = constRateTimecode(frameNumR,frameRate);
     
-    % extract frames
-    cmdL = ['ffmpeg -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 ' sprintf('.\\L\\L%08d.png',snapIdx)];
-    cmdR = ['ffmpeg -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 ' sprintf('.\\R\\R%08d.png',snapIdx)];
+    % extract frames (-y forces overwrite of output file)
+    % rescale output timescale for consistent labeling, won't correspond to
+    % actual clock time but we've converted our desired frame time for this
+    % already...
+    cmdL = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 ' sprintf('.\\L\\L%08d.png',snapIdx)];
+    cmdR = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 ' sprintf('.\\R\\R%08d.png',snapIdx)];
     system(cmdL);
     system(cmdR);
     
