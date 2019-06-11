@@ -48,8 +48,8 @@ for snapIdx = 1:length(timecodeData)
     % rescale output timescale for consistent labeling, won't correspond to
     % actual clock time but we've converted our desired frame time for this
     % already...
-    cmdL = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 ' sprintf('.\\L\\L%08d.png',snapIdx)];
-    cmdR = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 ' sprintf('.\\R\\R%08d.png',snapIdx)];
+    cmdL = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 ' sprintf('.\\L\\L%08d.tif',snapIdx)];
+    cmdR = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 ' sprintf('.\\R\\R%08d.tif',snapIdx)];
     system(cmdL);
     system(cmdR);
     
