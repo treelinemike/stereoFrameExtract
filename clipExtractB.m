@@ -1,4 +1,4 @@
-% simple script to extract a series ofap
+% simple script to extract a series of
 % video clips from a longer video file
 % at regularly-spaced intervals
 %
