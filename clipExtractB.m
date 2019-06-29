@@ -1,4 +1,4 @@
-% simple script to extract a series ofapt
+% simple script to extract a series ofap
 % video clips from a longer video file
 % at regularly-spaced intervals
 %
