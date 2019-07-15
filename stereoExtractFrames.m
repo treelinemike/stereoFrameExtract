@@ -44,13 +44,15 @@ for snapIdx = 1:length(timecodeData)
     flatTimecodeL = constRateTimecode(frameNumL,frameRate);
     flatTimecodeR = constRateTimecode(frameNumR,frameRate);
     
+    disp(['Extracting frame numbers (L/R): ' num2str(frameNumL) ' @ ' flatTimecodeL ' / ' num2str(frameNumR)  ' @ ' flatTimecodeR ]);
+    
     % extract frames (-y forces overwrite of output file)
     % rescale output timescale for consistent labeling, won't correspond to
     % actual clock time but we've converted our desired frame time for this
     % already...
     % -pix_fmt rgb48 => (16 bits x 3 colors) = 48 bit depth
-    cmdL = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 -pix_fmt rgb48 ' sprintf('.\\L\\L%08d.tif',snapIdx)];
-    cmdR = ['ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('.\\R\\R%08d.tif',snapIdx)];
+    cmdL = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 -pix_fmt rgb48 ' sprintf('.\\L\\L%08d.tif',snapIdx)];
+    cmdR = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('.\\R\\R%08d.tif',snapIdx)];
     system(cmdL);
     system(cmdR);
     
