@@ -5,12 +5,12 @@
 % uses system calls to ffmpeg
 
 % restart
-close all; clear all; clc;
+close all; clear; clc;
 
 % options / settings
-readFile = 'shoulder.mov';
-clipLength = 10.0;   % [sec] length of clips to extract
-clipSpacing = 30.0;  % [sec] spacing between clips (start to start)
+readFile = 'Shoulder1-Cycle20.avi';
+clipLength = 5;   % [sec] length of clips to extract
+clipSpacing = 5;  % [sec] spacing between clips (start to start)
 %sysPrefix = '/usr/local/bin/';  % needed for Mac, for some reason?
 sysPrefix = ''; % use this on MAK PC
 
@@ -31,8 +31,9 @@ clipSpacingNum = floor(frameRate*clipSpacing);
 clipStartIdxList = 1:clipSpacingNum:(numFrames-clipLengthNum);  % could make this something other than linear, and adjust starting point
 
 % extract clips
+% -ss after input isn't fast but should be accurate? updated 12-AUG-19
 for clipIdx = 1:length(clipStartIdxList)
-    startTimecode = constRateTimecode(clipStartIdxList(clipIdx),frameRate);
-    cmd = [sysPrefix 'ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -ss ' startTimecode ' -i ' readFile ' -t ' clipLengthStr ' ' sprintf('clip_%08d.mov',clipIdx)];
+    startTimecode = constRateTimecode(clipStartIdxList(clipIdx)-1,frameRate); % Note: start index -1 as we need an absolute frame number not a duration
+    cmd = [sysPrefix 'ffmpeg -y -r ' sprintf('%05.2f',frameRate) ' -i ' readFile ' -ss ' startTimecode ' -t ' clipLengthStr sprintf(' clip_%08d.mov',clipIdx)];
     system(cmd);
 end
