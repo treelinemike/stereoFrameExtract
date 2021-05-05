@@ -23,10 +23,12 @@ if( (frameRate ~= 29.97) && (frameRate ~= 59.94))
 end
 
 % load timecodes for LEFT frames
-fid = fopen(frameNumFileList);
-frameNumData = textscan(fid,'%d');
-fclose(fid);
-frameNumData = double(frameNumData{1});
+% using readmatrix() b/c textscan() fails with some BOM encoded CSV
+% files... strange...
+frameNumData = readmatrix(frameNumFileList);
+if(isempty(frameNumData))
+    error('Failed to read frame number data!');
+end
 
 % make L and R directories for image files
 if(~isfolder('L'))
