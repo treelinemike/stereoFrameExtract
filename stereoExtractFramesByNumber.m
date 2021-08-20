@@ -2,7 +2,7 @@
 % files
 %
 % uses actual frame numbers rather than dropcode, which can be easily
-% idetified using Shotcut
+% identified using Shotcut
 %
 % note: Shotcut doesn't do timecode consistently with ffmpeg or other
 % software (maybe?) but it does do frame numbers which is what we actually
@@ -60,8 +60,5 @@ for snapIdx = 1:length(frameNumData)
     cmdR = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('./R/R%08d.tif',snapIdx)];
     system(cmdL);
     system(cmdR);
-% disp(cmdL);
-% disp(cmdR);
-        
-
+	
 end
