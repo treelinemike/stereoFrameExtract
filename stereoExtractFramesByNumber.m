@@ -15,6 +15,11 @@
 % frameRate: only valid values are 29.97 and 59.94
 function stereoExtractFramesByNumber(vidFileL,vidFileR,offsetR,frameNumFileList,frameRate)
 
+% enable imagemagick and ffmpeg on mac platform
+if(ismac)
+    setenv('PATH', [getenv('PATH') ':/usr/local/bin']);
+end
+
 fprintf('Offset R: %d\n',offsetR);
 
 % make sure frame rate is appropriate

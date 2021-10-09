@@ -8,6 +8,11 @@
 % frameRate: only valid values are 29.97 and 59.94
 function stereoExtractFrames(vidFileL,vidFileR,offsetR,timecodeListFile,frameRate)
 
+% enable imagemagick and ffmpeg on mac platform
+if(ismac)
+    setenv('PATH', [getenv('PATH') ':/usr/local/bin']);
+end
+
 % make sure frame rate is appropriate
 if( (frameRate ~= 29.97) && (frameRate ~= 59.94))
     error('Unsupported frame rate, this only works for 29.97Hz and 59.94Hz');
