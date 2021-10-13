@@ -23,7 +23,7 @@ end
 fprintf('Offset R: %d\n',offsetR);
 
 % make sure frame rate is appropriate
-if( (frameRate ~= 29.97) && (frameRate ~= 59.94))
+if( (abs(frameRate - 29.970030) > 0.1) && (frameRate ~= 59.94))
     error('Unsupported frame rate, this only works for 29.97Hz and 59.94Hz');
 end
 
@@ -61,8 +61,8 @@ for snapIdx = 1:length(frameNumData)
     % actual clock time but we've converted our desired frame time for this
     % already...
     % -pix_fmt rgb48 => (16 bits x 3 colors) = 48 bit depth
-    cmdL = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 -pix_fmt rgb48 ' sprintf('./L/L%08d.tif',snapIdx)];
-    cmdR = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.2f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('./R/R%08d.tif',snapIdx)];
+    cmdL = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.6f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 -pix_fmt rgb48 ' sprintf('./L/L%08d.tif',snapIdx)];
+    cmdR = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.6f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('./R/R%08d.tif',snapIdx)];
     system(cmdL);
     system(cmdR);
 	
