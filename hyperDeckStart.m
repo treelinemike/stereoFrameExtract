@@ -36,7 +36,7 @@ else
     disp('Kinematics PC direct ping successful.');
     use.kinematicsPC = 1;
 end
-
+    
 % we could do something here if we got a network ping error
 % if(pingError)
 %     disp('Ping error!');
@@ -124,7 +124,7 @@ if(use.hyperDeckRight)
     fprintf(hyperDeckLeftSocket,'record\n');
 end
 if(use.kinematicsPC)
-    fprintf(kinematicsPCSocket,'recordx');
+    fprintf(kinematicsPCSocket,'record');
 end
 % fprintf(hyperDeckLeft,'stop\n');
 % fprintf(hyperDeckRight,'stop\n');
