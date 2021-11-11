@@ -1,32 +1,37 @@
 % restart
 close all; clear; clc;
 
+kinematicsOnly = 1;
+
 % Addresses for Left and Right Hyperdecks
 % TODO: this shouldn't be hard coded!!
 % Set PC to 192.168.10.10 (or something similar, netmask 255.255.255.0)
 hyperDeckLeftIP = '192.168.10.50';
 hyperDeckRightIP = '192.168.10.60';
-kinematicsPCIP = '127.0.0.1';%'192.168.10.70';
+kinematicsPCIP = '192.168.10.70';
 
 % Send network ping to Hyperdecks to make sure we'll be able to connect
 use.hyperDeckLeft = 0;
 use.hyperDeckRight = 0;
 use.kinematicsPC = 0;
 pingError = 0;
-if( isAlive(hyperDeckLeftIP,100) == 0 )
-    warning('Cannot directly ping LEFT HyperDeck!');
-    pingError = 1;
-else
-    disp('Left HyperDeck direct ping successful.');
-    use.hyperDeckLeft = 1;
-end
 
-if( isAlive(hyperDeckRightIP,100) == 0 )
-    warning('Cannot directly ping RIGHT HyperDeck!');
-    pingError = 1;
-else
-    disp('Right HyperDeck direct ping successful.');
-    use.hyperDeckRight = 1;
+if(~kinematicsOnly)
+    if( isAlive(hyperDeckLeftIP,100) == 0 )
+        warning('Cannot directly ping LEFT HyperDeck!');
+        pingError = 1;
+    else
+        disp('Left HyperDeck direct ping successful.');
+        use.hyperDeckLeft = 1;
+    end
+
+    if( isAlive(hyperDeckRightIP,100) == 0 )
+        warning('Cannot directly ping RIGHT HyperDeck!');
+        pingError = 1;
+    else
+        disp('Right HyperDeck direct ping successful.');
+        use.hyperDeckRight = 1;
+    end
 end
 
 if( isAlive(kinematicsPCIP,100) == 0 )
@@ -44,6 +49,7 @@ end
 
 % create TCPIP objects for each connection
 % and open TCPIP channels
+if(~kinematicsOnly)
 if(use.hyperDeckLeft)
     hyperDeckLeftSocket = tcpip(hyperDeckLeftIP,9993);
     fopen(hyperDeckLeftSocket);
@@ -63,6 +69,7 @@ if(use.hyperDeckRight)
     flushinput(hyperDeckRightSocket);
     flushoutput(hyperDeckRightSocket);
 end
+end
 
 if(use.kinematicsPC)
     kinematicsPCSocket = tcpip(kinematicsPCIP,9993);
@@ -76,13 +83,14 @@ end
 
 % send software ping to each Hyperdeck
 % and configure settings
+if(~kinematicsOnly)
 if(use.hyperDeckLeft)
     fprintf(hyperDeckLeftSocket,'ping\n');
     respL = fgets(hyperDeckLeftSocket);
     if(isempty(respL) || ~strcmp(respL(1:6),'200 ok'))
         error('Software ping to LEFT HyperDeck failed!');
     else
-        print('Software ping to LEFT HyperDeck successful.');
+        disp('Software ping to LEFT HyperDeck successful.');
     end
     
     % enable REMOTE
@@ -102,7 +110,7 @@ if(use.hyperDeckRight)
     if(isempty(respL) || ~strcmp(respL(1:6),'200 ok'))
         error('Software ping to RIGHT HyperDeck failed!');
     else
-        print('Software ping to RIGHT HyperDeck successful.');
+        disp('Software ping to RIGHT HyperDeck successful.');
     end
     % enable REMOTE
     fprintf(hyperDeckRightSocket,'remote: enable: true\n');
@@ -114,14 +122,17 @@ if(use.hyperDeckRight)
     respR = fgets(hyperDeckRightSocket);
     disp(['Slot 1 select RIGHT: ' strtrim(char(respR))]);
 end
+end
 
 % start recording on both Hyper Decks
 % Note: \n seems to work in MATLAB on windows, need \r\n in python
+if(~kinematicsOnly)
 if(use.hyperDeckLeft)
     fprintf(hyperDeckRightSocket,'record\n');    
 end
 if(use.hyperDeckRight)
     fprintf(hyperDeckLeftSocket,'record\n');
+end
 end
 if(use.kinematicsPC)
     fprintf(kinematicsPCSocket,'record');
@@ -131,6 +142,7 @@ end
 
 % get response to record command (if applicable) and close socket
 % TODO: This will add a small delay, find a workaround
+if(~kinematicsOnly)
 if(use.hyperDeckLeft)
     respL = fgets(hyperDeckLeftSocket);
     disp(['Record LEFT: ' strtrim(char(respL))]);
@@ -141,6 +153,7 @@ if(use.hyperDeckRight)
     respR = fgets(hyperDeckRightSocket);
     disp(['Record RIGHT: ' strtrim(char(respR))]);
     fclose(hyperDeckRightSocket);
+end
 end
 
 if(use.kinematicsPC)
