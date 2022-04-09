@@ -23,7 +23,7 @@ end
 fprintf('Offset R: %d\n',offsetR);
 
 % make sure frame rate is appropriate
-if( (abs(frameRate - 29.970030) > 0.1) && (frameRate ~= 59.94))
+if( (abs(frameRate - (30/1.001)) > 0.1) && (abs(frameRate - (60/1.001)) > 0.1)  )
     error('Unsupported frame rate, this only works for 29.97Hz and 59.94Hz');
 end
 

@@ -9,6 +9,7 @@ kinematicsOnly = 1;
 hyperDeckLeftIP = '192.168.10.50';
 hyperDeckRightIP = '192.168.10.60';
 kinematicsPCIP = '192.168.10.70';
+% kinematicsPCIP = '127.0.0.1';
 
 % Send network ping to Hyperdecks to make sure we'll be able to connect
 use.hyperDeckLeft = 0;
