@@ -63,7 +63,7 @@ for snapIdx = 1:length(frameNumData)
     % -pix_fmt rgb48 => (16 bits x 3 colors) = 48 bit depth
     cmdL = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.6f',frameRate) ' -ss ' flatTimecodeL ' -i ' vidFileL ' -vframes 1 -pix_fmt rgb48 ' sprintf('./L/L%08d.tif',snapIdx)];
     cmdR = ['ffmpeg -hide_banner -loglevel panic -y -r ' sprintf('%05.6f',frameRate) ' -ss ' flatTimecodeR ' -i ' vidFileR ' -vframes 1 -pix_fmt rgb48 ' sprintf('./R/R%08d.tif',snapIdx)];
-    system(cmdL);
-    system(cmdR);
+    assert(system(cmdL)==0,'Left frame extraction failed!');
+    assert(system(cmdR)==0,'Right frame extraction failed!');
 	
 end

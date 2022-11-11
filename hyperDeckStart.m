@@ -1,7 +1,7 @@
 % restart
 close all; clear; clc;
 
-kinematicsOnly = 1;
+kinematicsOnly = 0;
 
 % Addresses for Left and Right Hyperdecks
 % TODO: this shouldn't be hard coded!!
@@ -12,8 +12,8 @@ kinematicsPCIP = '192.168.10.70';
 % kinematicsPCIP = '127.0.0.1';
 
 % Send network ping to Hyperdecks to make sure we'll be able to connect
-use.hyperDeckLeft = 0;
-use.hyperDeckRight = 0;
+use.hyperDeckLeft = 1;
+use.hyperDeckRight = 1;
 use.kinematicsPC = 0;
 pingError = 0;
 
