@@ -1,7 +1,8 @@
 % restart
 close all; clear; clc;
 
-kinematicsOnly = 0;
+% options
+swping_max_attempts = 3;   % number of HyperDeck ping retries (to avoid lockups)
 
 % Addresses for Left and Right Hyperdecks
 % TODO: this shouldn't be hard coded!!
@@ -11,129 +12,147 @@ hyperDeckRightIP = '192.168.10.60';
 kinematicsPCIP = '192.168.10.70';
 % kinematicsPCIP = '127.0.0.1';
 
-% Send network ping to Hyperdecks to make sure we'll be able to connect
-use.hyperDeckLeft = 1;
-use.hyperDeckRight = 1;
-use.kinematicsPC = 1;
-pingError = 0;
+%% Send standard network ping to Hyperdecks to check physical connection
+use.hyperDeckLeft = true;
+use.hyperDeckRight = true;
+use.kinematicsPC = true;
+pingError = false;
 
-if(~kinematicsOnly)
+if(use.hyperDeckLeft)
     if( isAlive(hyperDeckLeftIP,100) == 0 )
         warning('Cannot directly ping LEFT HyperDeck!');
-        pingError = 1;
+        use.hyperDeckLeft = false;
+        pingError = true;
     else
-        disp('Left HyperDeck direct ping successful.');
-        use.hyperDeckLeft = 1;
+        disp('LEFT HyperDeck direct ping successful.');
+        use.hyperDeckLeft = true;
     end
-
-    if( isAlive(hyperDeckRightIP,100) == 0 )
-        warning('Cannot directly ping RIGHT HyperDeck!');
-        pingError = 1;
-    else
-        disp('Right HyperDeck direct ping successful.');
-        use.hyperDeckRight = 1;
-    end
-end
-
-if( isAlive(kinematicsPCIP,100) == 0 )
-    warning('Cannot directly ping kinematics PC!');
-    pingError = 1;
-else
-    disp('Kinematics PC direct ping successful.');
-    use.kinematicsPC = 1;
-end
-    
-% we could do something here if we got a network ping error
-% if(pingError)
-%     disp('Ping error!');
-% end
-
-% create TCPIP objects for each connection
-% and open TCPIP channels
-if(~kinematicsOnly)
-if(use.hyperDeckLeft)
-    hyperDeckLeftSocket = tcpip(hyperDeckLeftIP,9993);
-    fopen(hyperDeckLeftSocket);
-    if(~strcmp(hyperDeckLeftSocket.status,'open'))
-        error('Error opening LEFT HyperDeck TCP/IP socket.');
-    end
-    flushinput(hyperDeckLeftSocket);
-    flushoutput(hyperDeckLeftSocket);
 end
 
 if(use.hyperDeckRight)
-    hyperDeckRightSocket = tcpip(hyperDeckRightIP,9993);
-    fopen(hyperDeckRightSocket);
-    if(~strcmp(hyperDeckRightSocket.status,'open'))
-        error('Error opening RIGHT HyperDeck TCP/IP socket.');
+    if( isAlive(hyperDeckRightIP,100) == 0 )
+        warning('Cannot directly ping RIGHT HyperDeck!');
+        use.hyperDeckRight = false;
+        pingError = true;
+    else
+        disp('RIGHT HyperDeck direct ping successful.');
+        use.hyperDeckRight = true;
     end
-    flushinput(hyperDeckRightSocket);
-    flushoutput(hyperDeckRightSocket);
-end
 end
 
 if(use.kinematicsPC)
-    kinematicsPCSocket = tcpip(kinematicsPCIP,9993);
-    fopen(kinematicsPCSocket);
-    if(~strcmp(kinematicsPCSocket.status,'open'))
-        error('Error opening kinematics PC TCP/IP socket.');
+    if( isAlive(kinematicsPCIP,100) == 0 )
+        warning('Cannot directly ping kinematics PC!');
+        use.kinematicsPC = false;
+        pingError = true;
+    else
+        disp('KINPC direct ping successful.');
+        use.kinematicsPC = true;
     end
-    flushinput(kinematicsPCSocket);
-    flushoutput(kinematicsPCSocket);
 end
 
-% send software ping to each Hyperdeck
-% and configure settings
-if(~kinematicsOnly)
+% do not attempt to open any TCP connections if requested pings were
+% unsuccessful
+if(pingError)
+    error('Ping error! Not proceeding');
+end
+fprintf("\n");
+
+%% open sockets to each device and send initialization commands
+
 if(use.hyperDeckLeft)
-    fprintf(hyperDeckLeftSocket,'ping\n');
-    respL = fgets(hyperDeckLeftSocket);
-    if(isempty(respL) || ~strcmp(respL(1:6),'200 ok'))
-        error('Software ping to LEFT HyperDeck failed!');
-    else
-        disp('Software ping to LEFT HyperDeck successful.');
-    end
     
+    % open socket and flush input and output buffers
+    hyperDeckLeftSocket = tcpclient(hyperDeckLeftIP,9993,'ConnectTimeout',5,'Timeout',5);
+    hyperDeckLeftSocket.flush();
+    
+    % attempt software ping
+    swping_success = false;
+    swping_attempts = 0;
+    while(~swping_success && swping_attempts < swping_max_attempts)
+        hyperDeckLeftSocket.writeline('ping');
+        resp = hyperDeckLeftSocket.readline();
+        if(strcmp(resp.extractBetween(1,6),"200 ok"))
+            swping_success = true;
+        else
+            hyperDeckLeftSocket.flush();
+        end
+        swping_attempts = swping_attempts + 1;
+    end
+    if(~swping_success)
+        clear hyperDeckLeftSocket;
+        error('LEFT HyperDeck software ping FAILED.');
+    else
+        fprintf('LEFT HyperDesk software ping successful (attempts: %d)\n',swping_attempts);
+    end
+
     % enable REMOTE
-    fprintf(hyperDeckLeftSocket,'remote: enable: true\n');
-    respL = fgets(hyperDeckLeftSocket);
-    disp(['Remote enable LEFT: ' strtrim(char(respL))]);
+    hyperDeckLeftSocket.writeline('remote: enable: true');
+    resp = hyperDeckLeftSocket.readline();
+    disp(['LEFT HyperDeck remote enable: ' strtrim(char(resp))]);
     
     % select slot 1
-    fprintf(hyperDeckLeftSocket,'slot select: slot id: 1\n');
-    respL = fgets(hyperDeckLeftSocket);
-    disp(['Slot 1 select LEFT: ' strtrim(char(respL))]);
+    hyperDeckLeftSocket.writeline('slot select: slot id: 1');
+    resp = hyperDeckLeftSocket.readline();
+    disp(['LEFT HyperDeck slot 1 select: ' strtrim(char(resp))]);
+
+    fprintf('\n');
 end
 
 if(use.hyperDeckRight)
-    fprintf(hyperDeckRightSocket,'ping\n');
-    respR = fgets(hyperDeckRightSocket);
-    if(isempty(respL) || ~strcmp(respL(1:6),'200 ok'))
-        error('Software ping to RIGHT HyperDeck failed!');
-    else
-        disp('Software ping to RIGHT HyperDeck successful.');
+    
+    % open socket and flush input and output buffers
+    hyperDeckRightSocket = tcpclient(hyperDeckRightIP,9993,'ConnectTimeout',5,'Timeout',5);
+    hyperDeckRightSocket.flush();
+    
+    % attempt software ping
+    swping_success = false;
+    swping_attempts = 0;
+    while(~swping_success && swping_attempts < swping_max_attempts)
+        hyperDeckRightSocket.writeline('ping');
+        resp = hyperDeckRightSocket.readline();
+        if(strcmp(resp.extractBetween(1,6),"200 ok"))
+            swping_success = true;
+        else
+            hyperDeckRightSocket.flush();
+        end
+        swping_attempts = swping_attempts + 1;
     end
+    if(~swping_success)
+        clear hyperDeckRightSocket;
+        error('RIGHT HyperDeck software ping FAILED.');
+    else
+        fprintf('RIGHT HyperDesk software ping successful (attempts: %d)\n',swping_attempts);
+    end
+
     % enable REMOTE
-    fprintf(hyperDeckRightSocket,'remote: enable: true\n');
-    respR = fgets(hyperDeckRightSocket);
-    disp(['Remote enable RIGHT: ' strtrim(char(respR))]);
+    hyperDeckRightSocket.writeline('remote: enable: true');
+    resp = hyperDeckRightSocket.readline();
+    disp(['RIGHT HyperDeck remote enable: ' strtrim(char(resp))]);
     
     % select slot 1
-    fprintf(hyperDeckRightSocket,'slot select: slot id: 1\n');
-    respR = fgets(hyperDeckRightSocket);
-    disp(['Slot 1 select RIGHT: ' strtrim(char(respR))]);
+    hyperDeckRightSocket.writeline('slot select: slot id: 1');
+    resp = hyperDeckRightSocket.readline();
+    disp(['RIGHT HyperDeck slot 1 select: ' strtrim(char(resp))]);
+
+    fprintf('\n');
 end
+
+
+if(use.kinematicsPC)
+    kinematicsPCSocket = tcpclient(kinematicsPCIP,9993,'ConnectTimeout',5,'Timeout',5);
+    kinematicsPCSocket.flush();
+    fprintf('KINPC socket creation successful.\n');
 end
+
 
 % start recording on both Hyper Decks
 % Note: \n seems to work in MATLAB on windows, need \r\n in python
-if(~kinematicsOnly)
 if(use.hyperDeckLeft)
-    fprintf(hyperDeckRightSocket,'record\n');    
+    hyperDeckLeftSocket.writeline('record');    
 end
 if(use.hyperDeckRight)
-    fprintf(hyperDeckLeftSocket,'record\n');
-end
+    hyperDeckRightSocket.writeline('record');
 end
 if(use.kinematicsPC)
     fprintf(kinematicsPCSocket,'record');
@@ -143,20 +162,18 @@ end
 
 % get response to record command (if applicable) and close socket
 % TODO: This will add a small delay, find a workaround
-if(~kinematicsOnly)
 if(use.hyperDeckLeft)
-    respL = fgets(hyperDeckLeftSocket);
-    disp(['Record LEFT: ' strtrim(char(respL))]);
-    fclose(hyperDeckLeftSocket);
+    resp = hyperDeckLeftSocket.readline();
+    disp(['LEFT record: ' strtrim(char(resp))]);
+    clear hyperDeckLeftSocket;
 end
-
 if(use.hyperDeckRight)
-    respR = fgets(hyperDeckRightSocket);
-    disp(['Record RIGHT: ' strtrim(char(respR))]);
-    fclose(hyperDeckRightSocket);
-end
+    resp = hyperDeckRightSocket.readline();
+    disp(['RIGHT record: ' strtrim(char(resp))]);
+    clear hyperDeckRightSocket;
 end
 
 if(use.kinematicsPC)
-    fclose(kinematicsPCSocket);
+    fprintf('KINPC record command sent.\n');
+    clear kinematicsPCSocket;
 end
