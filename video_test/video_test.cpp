@@ -149,37 +149,41 @@ int main(void){
         return -1;
     }
 
+    /*
     // get our encoder ready
     AVCodec *tiff_codec = NULL;
     if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL){
         std::cout << "ERROR: COULD NOT FIND OUTPUT IMAGE ENCODER" << std::endl;
         return -1;
     }
-    FILE *img_file;
-    char img_filename[256];
-    bool got_encoder_output = false;
+
     AVCodecContext * img_ctx = NULL;
     if( !(img_ctx = avcodec_alloc_context3(tiff_codec)) ){
         std::cout << "ERROR: COULD NOT ALLOCATE CONTEXT FOR IMAGES" << std::endl;
         return -1;
     }
-    img_ctx->pix_fmt = AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
+    img_ctx->pix_fmt = AV_PIX_FMT_YUV420P;//AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
     img_ctx->time_base = (AVRational){1,1};
     img_ctx->width = expected_width;
     img_ctx->height = expected_height;
+    // initialize encoder
+    std::cout << "test" << std::endl;
+    if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
+        std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+        return -1;
+    }
+    
     AVPacket *pkt_enc = NULL;
     pkt_enc = av_packet_alloc();
     if(!pkt_enc){
         std::cout << "ERROR: COULD NOT ALLOCATE ENCODER PACKET POINTER" << std::endl;
         return -1;
     }
-    // initialize encoder
-    if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
-        std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-        return -1;
-    }
-    
 
+    */
+    FILE *img_file;
+    char img_filename[256];
+    bool got_encoder_output = false;
 
     // now we start reading
     unsigned int my_frame_counter = 0;
@@ -201,6 +205,8 @@ int main(void){
                 
                     // we received a valid frame, so increment counter
                     ++my_frame_counter;
+
+                    /*
 
                     // set frame parameters, ensuring that they haven't changed from the expected values
                     if( (img_ctx->pix_fmt = dec_ctx->pix_fmt) != expected_pix_fmt ){
@@ -227,12 +233,35 @@ int main(void){
                     // TODO: add a timeout and error checking
                     while(!avcodec_receive_packet(img_ctx,pkt_enc)){
                     };
+*/
+        
+                    
+                    printf("Coded picture number: %d\n",frame->coded_picture_number); 
+                    printf("Display picture number: %d\n",frame->display_picture_number);
+                    printf("Frame linesize[0]: %d\n",frame->linesize[0]);
+                    printf("Frame linesize[1]: %d\n",frame->linesize[1]);
+                    printf("Frame linesize[2]: %d\n",frame->linesize[2]);
+                    printf("Frame linesize[3]: %d\n",frame->linesize[3]);
+                    printf("Frame linesize[4]: %d\n",frame->linesize[4]);
+
+                    for(int line_idx = 0; line_idx < 3; ++line_idx){
+                        uint8_t **this_line = frame->extended_data +
+
+                        for(int data_idx = 0; data_idx < expected_height*frame->linesize[line_idx]; data_idx += 2){
+                            uint16_t grayval = 0;
+                            memcpy(&grayval,this_line+data_idx,2);
+                            printf("Grayval: %u\n",grayval);
+                        }
+
+                    }
+                    
+
 
                     //
-                    sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
-                    img_file = fopen(img_filename,"wb");
-                    fwrite(pkt_enc->data,1,pkt_enc->size,img_file);
-                    fclose(img_file);
+                    //sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
+                    //img_file = fopen(img_filename,"wb");
+                    //fwrite(pkt_enc->data,1,pkt_enc->size,img_file);
+                    //fclose(img_file);
                 }
                 
                 // unreference the frame pointer
