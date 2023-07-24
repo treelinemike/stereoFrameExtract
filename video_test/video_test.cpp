@@ -17,15 +17,15 @@ extern "C" {
 #define VIDEO_FILE "test_twoframe.mov"
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
-typedef struct StreamContext{
-    AVCodecContext * dec_ctx;
-    AVCodecContext * enc_ctx;
-    AVFrame * dec_frame;
-} StreamContext;
+//typedef struct StreamContext{
+//    AVCodecContext * dec_ctx;
+//    AVCodecContext * enc_ctx;
+//    AVFrame * dec_frame;
+//} StreamContext;
 
 static AVFormatContext * ifmt_ctx;
 static AVFormatContext * ofmt_ctx;
-static StreamContext * stream_ctx;
+//static StreamContext * stream_ctx;
 
 int main(void){
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
@@ -48,10 +48,10 @@ int main(void){
     std::cout << std::endl;
 
     // allocate memory for streams
-    stream_ctx = (StreamContext*) av_calloc(ifmt_ctx->nb_streams, sizeof(*stream_ctx)); 
-    if(!stream_ctx){
-        std::cout << "Error, cannot allocate memory for stream!" << std::endl;
-    }
+    //stream_ctx = (StreamContext*) av_calloc(ifmt_ctx->nb_streams, sizeof(*stream_ctx)); 
+    //if(!stream_ctx){
+    //    std::cout << "Error, cannot allocate memory for stream!" << std::endl;
+    //}
 
     // look for a single v210 video stream in this container
     unsigned int video_stream_idx = 0;
@@ -123,7 +123,9 @@ int main(void){
 
     // report frame width and height
     std::cout << "Width: " << dec_ctx->width << ", Height: " << dec_ctx->height << std::endl;
-    
+    int expected_width = dec_ctx->width;
+    int expected_height = dec_ctx->height;
+    int expected_pix_fmt = dec_ctx->pix_fmt;
     
     // allocate image frame
     static uint8_t *video_dst_data[4] = {NULL};
@@ -137,7 +139,7 @@ int main(void){
     AVPacket *pkt = NULL;
     pkt = av_packet_alloc();
     if(!pkt){
-        std::cout << "ERROR: COULD NOT ALLOCATE PACKET POINTER" << std::endl;
+        std::cout << "ERROR: COULD NOT ALLOCATE DECODER PACKET POINTER" << std::endl;
         return -1;
     }
     static AVFrame *frame = NULL;
@@ -146,6 +148,37 @@ int main(void){
         std::cout << "ERROR: COULD NOT ALLOCATE FRAME POINTER" << std::endl;
         return -1;
     }
+
+    // get our encoder ready
+    AVCodec *tiff_codec = NULL;
+    if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL){
+        std::cout << "ERROR: COULD NOT FIND OUTPUT IMAGE ENCODER" << std::endl;
+        return -1;
+    }
+    FILE *img_file;
+    char img_filename[256];
+    bool got_encoder_output = false;
+    AVCodecContext * img_ctx = NULL;
+    if( !(img_ctx = avcodec_alloc_context3(tiff_codec)) ){
+        std::cout << "ERROR: COULD NOT ALLOCATE CONTEXT FOR IMAGES" << std::endl;
+        return -1;
+    }
+    img_ctx->pix_fmt = AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
+    img_ctx->time_base = (AVRational){1,1};
+    img_ctx->width = expected_width;
+    img_ctx->height = expected_height;
+    AVPacket *pkt_enc = NULL;
+    pkt_enc = av_packet_alloc();
+    if(!pkt_enc){
+        std::cout << "ERROR: COULD NOT ALLOCATE ENCODER PACKET POINTER" << std::endl;
+        return -1;
+    }
+    // initialize encoder
+    if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
+        std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+        return -1;
+    }
+    
 
 
     // now we start reading
@@ -168,14 +201,46 @@ int main(void){
                 
                     // we received a valid frame, so increment counter
                     ++my_frame_counter;
+
+                    // set frame parameters, ensuring that they haven't changed from the expected values
+                    if( (img_ctx->pix_fmt = dec_ctx->pix_fmt) != expected_pix_fmt ){
+                        std::cout << "ERROR: PIXEL FORMAT CHANGED!" << std::endl;
+                        return -1;
+                    }
+                    if( (img_ctx->width = dec_ctx->width) != expected_width ){
+                        std::cout << "ERROR: WIDTH CHANGED!" << std::endl;
+                        return -1;
+                    }
+                    if( (img_ctx->height = dec_ctx->height) != expected_height ){
+                        std::cout << "ERROR: HEIGHT CHANGED!" << std::endl;
+                        return -1;
+                    }
+                    
+                    // send frame to image encoder
+                    int thisret = 0;
+                    if( (thisret = avcodec_send_frame(img_ctx, frame)) < 0){
+                        std::cout << "ERROR: COULD NOT SEND FRAME TO IMAGE ENCODER! " << thisret << std::endl;
+                        return -1;
+                    }
+
+                    // retrieve packet from encoder
+                    // TODO: add a timeout and error checking
+                    while(!avcodec_receive_packet(img_ctx,pkt_enc)){
+                    };
+
+                    //
+                    sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
+                    img_file = fopen(img_filename,"wb");
+                    fwrite(pkt_enc->data,1,pkt_enc->size,img_file);
+                    fclose(img_file);
                 }
                 
+                // unreference the frame pointer
                 av_frame_unref(frame);
-            }
-            
-        
-            
+            }        
         }
+
+        // unreference the packet pointer
         av_packet_unref(pkt);
     }
 
