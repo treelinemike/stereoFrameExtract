@@ -1,5 +1,5 @@
 // until we have a makefile or cmake, compile with:
-// g++ -Wall -o video_test video_test.cpp -lavutil -lavformat -lavutils
+// g++ -Wall -o video_test video_test.cpp -lavutil -lavformat -lavutil
 
 // followed several ffmpeg examples to create this
 
