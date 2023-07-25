@@ -203,8 +203,6 @@ int main(void){
             while( retval >= 0 ){
                 if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
                 
-                    // we received a valid frame, so increment counter
-                    ++my_frame_counter;
 
                     /*
 
@@ -238,23 +236,31 @@ int main(void){
                     
                     printf("Coded picture number: %d\n",frame->coded_picture_number); 
                     printf("Display picture number: %d\n",frame->display_picture_number);
-                    printf("Frame linesize[0]: %d\n",frame->linesize[0]);
-                    printf("Frame linesize[1]: %d\n",frame->linesize[1]);
-                    printf("Frame linesize[2]: %d\n",frame->linesize[2]);
-                    printf("Frame linesize[3]: %d\n",frame->linesize[3]);
-                    printf("Frame linesize[4]: %d\n",frame->linesize[4]);
-
-                    for(int line_idx = 0; line_idx < 3; ++line_idx){
-                        uint8_t **this_line = frame->extended_data +
-
-                        for(int data_idx = 0; data_idx < expected_height*frame->linesize[line_idx]; data_idx += 2){
-                            uint16_t grayval = 0;
-                            memcpy(&grayval,this_line+data_idx,2);
-                            printf("Grayval: %u\n",grayval);
-                        }
-
-                    }
+                    printf("Frame linesize[0] = Y: %d\n",frame->linesize[0]);
+                    printf("Frame linesize[1] = U: %d\n",frame->linesize[1]);
+                    printf("Frame linesize[2] = V: %d\n",frame->linesize[2]);
+                        
+                    FILE * outfile;
+                    char outfilename[255];
+                    sprintf(outfilename,"frame%02d.csv",my_frame_counter);
+                    outfile = fopen(outfilename,"wb");
                     
+                    std::cout << "test" << std::endl;
+                   
+
+                    uint8_t *data_start = frame->data[0];
+                    for(int line_idx = 0; line_idx < expected_height; ++line_idx){
+
+                        for(int data_idx = 0; data_idx < frame->linesize[0]; data_idx += 2){
+                            uint16_t grayval = 0;
+                            memcpy(&grayval,data_start+line_idx*(frame->linesize[0])+data_idx,2);
+                            fprintf(outfile,"%04u ",grayval);
+                            //std::cout << ".";
+                        }
+                        fprintf(outfile,"\n");
+                        //std::cout << std::endl;
+                    }
+                    fclose(outfile); 
 
 
                     //
@@ -262,6 +268,10 @@ int main(void){
                     //img_file = fopen(img_filename,"wb");
                     //fwrite(pkt_enc->data,1,pkt_enc->size,img_file);
                     //fclose(img_file);
+                    
+                    // we received a valid frame, so increment counter
+                    ++my_frame_counter;
+                
                 }
                 
                 // unreference the frame pointer
@@ -273,7 +283,7 @@ int main(void){
         av_packet_unref(pkt);
     }
 
-    std::cout << "Processed " << my_frame_counter + 1 << " frames!" << std::endl;
+    std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
 
     // done
     return 0;
