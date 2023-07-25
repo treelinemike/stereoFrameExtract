@@ -1,5 +1,5 @@
 // until we have a makefile or cmake, compile with:
-// g++ -Wall -o video_test video_test.cpp -lavutil -lavformat -lavcodec
+// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lopencv_core -lopencv_imgproc -lopencv_highgui -o video_test  
 
 // followed several ffmpeg examples to create this
 
@@ -13,6 +13,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <opencv2/opencv.hpp>
 
 #define VIDEO_FILE "test_twoframe.mov"
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
@@ -185,6 +186,9 @@ int main(void){
     char img_filename[256];
     bool got_encoder_output = false;
 
+    cv::Mat cvFrame(expected_height, expected_width, CV_16UC1);
+    cv::Mat cvFrameRGB(expected_height, expected_width, CV_16UC3);
+
     // now we start reading
     unsigned int my_frame_counter = 0;
     int avreadframe_ret = 123;
@@ -234,8 +238,8 @@ int main(void){
 */
         
                     
-                    printf("Coded picture number: %d\n",frame->coded_picture_number); 
-                    printf("Display picture number: %d\n",frame->display_picture_number);
+                    //printf("Coded picture number: %d\n",frame->coded_picture_number); 
+                    //printf("Display picture number: %d\n",frame->display_picture_number);
                     printf("Frame linesize[0] = Y: %d\n",frame->linesize[0]);
                     printf("Frame linesize[1] = U: %d\n",frame->linesize[1]);
                     printf("Frame linesize[2] = V: %d\n",frame->linesize[2]);
@@ -244,11 +248,16 @@ int main(void){
                     char outfilename[255];
                     sprintf(outfilename,"frame%02d.csv",my_frame_counter);
                     outfile = fopen(outfilename,"wb");
-                    
-                    std::cout << "test" << std::endl;
                    
-
                     uint8_t *data_start = frame->data[0];
+                    uint8_t *mat_start = cvFrame.ptr<uint8_t>();
+                    memcpy(mat_start,data_start,(size_t)expected_height*(frame->linesize[0]));
+                    //cv::cvtColor(cvFrame,cvFrameRGB,cv::COLOR_YCrCb2RGB,3);            
+                    cvFrame *= 64;   // scale up because we just put 10-bit values into 16-bit elements....
+
+                    cv::imshow("my window",cvFrame);
+                    cv::waitKey();
+
                     for(int line_idx = 0; line_idx < expected_height; ++line_idx){
 
                         for(int data_idx = 0; data_idx < frame->linesize[0]; data_idx += 2){
