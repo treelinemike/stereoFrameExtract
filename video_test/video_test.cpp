@@ -186,7 +186,7 @@ int main(void){
     char img_filename[256];
     bool got_encoder_output = false;
 
-    cv::Mat cvFrame(expected_height, expected_width, CV_16UC1);
+    cv::Mat cvFrame(expected_height, expected_width, CV_16UC3);
     cv::Mat cvFrameRGB(expected_height, expected_width, CV_16UC3);
 
     // now we start reading
@@ -251,9 +251,30 @@ int main(void){
                    
                     uint8_t *data_start = frame->data[0];
                     uint8_t *mat_start = cvFrame.ptr<uint8_t>();
-                    memcpy(mat_start,data_start,(size_t)expected_height*(frame->linesize[0]));
-                    //cv::cvtColor(cvFrame,cvFrameRGB,cv::COLOR_YCrCb2RGB,3);            
+                    
+                    // copy Y plane (full plane, 16 bit data depth)
+                    memcpy( mat_start,
+                            data_start, 
+                            (size_t)expected_height*(frame->linesize[0]));
+                   /* 
+                    // copy U plane (need to double copy chroma components from 4:2:2 packing, 16 bit data depth)
+                    mat_start = cvFrame.ptr<uint8_t>()+2*expected_width*expected_height;
+                    for(unsigned int inidx = 0; inidx < frame->linesize[1]/2; inidx += 1){
+                        memcpy(mat_start + 4*inidx,frame->data[1]+2*inidx,2);
+                        memcpy(mat_start + 4*inidx + 2, frame->data[1]+2*inidx,2);
+                    }
+                    
+                    // copy U plane (need to double copy chroma components from 4:2:2 packing, 16 bit data depth)
+                    mat_start = cvFrame.ptr<uint8_t>()+4*expected_width*expected_height;
+                    for(unsigned int inidx = 0; inidx < frame->linesize[2]/2; inidx+= 1){
+                        memcpy(mat_start + 4*inidx,frame->data[2]+2*inidx,2);
+                        memcpy(mat_start + 4*inidx + 2, frame->data[2]+2*inidx,2);
+                    }
+                    
+                    */
                     cvFrame *= 64;   // scale up because we just put 10-bit values into 16-bit elements....
+
+                    //cv::cvtColor(cvFrame,cvFrameRGB,cv::COLOR_YUV2RGB);            
 
                     cv::imshow("my window",cvFrame);
                     cv::waitKey();
