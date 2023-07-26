@@ -186,9 +186,8 @@ int main(void){
     char img_filename[256];
     bool got_encoder_output = false;
 
-    cv::Mat cvFrameYUV1(expected_height, expected_width, CV_16UC3);
-    //cv::Mat cvFrameYUV3(expected_height, expected_width, CV_16UC1);
-    cv::Mat cvFrameRGB(expected_height, expected_width, CV_16UC3);
+    cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
+    cv::Mat cvFrameBGR;
 
     // now we start reading
     unsigned int my_frame_counter = 0;
@@ -250,34 +249,51 @@ int main(void){
                     sprintf(outfilename,"frame%02d.csv",my_frame_counter);
                     outfile = fopen(outfilename,"wb");
                    
-                    uint8_t *data_start = frame->data[0];
-                    uint8_t *mat_start = cvFrameYUV1.ptr<uint8_t>();
+                    uint16_t *pAVFrm = NULL;
+                    uint16_t *pCVMat = NULL;                    
                     
-                    // copy Y plane (full plane, 16 bit data depth)
-                    memcpy( mat_start,
-                            data_start, 
-                            (size_t)expected_height*(frame->linesize[0]));
-                    // copy U plane (need to double copy chroma components from 4:2:2 packing, 16 bit data depth)
-                    mat_start = cvFrameYUV1.ptr<uint8_t>()+2*expected_width*expected_height;
-                    for(unsigned int inidx = 0; inidx < frame->linesize[1]/2; inidx += 1){
-                        memcpy(mat_start + 4*inidx,frame->data[1]+2*inidx,2);
-                        memcpy(mat_start + 4*inidx + 2, frame->data[1]+2*inidx,2);
+                    // copy Y/Luma
+                    pAVFrm = (uint16_t *)frame->data[0];
+                    pCVMat = cvFrameYUV.ptr<uint16_t>();
+                    pCVMat += 1;
+                    for(unsigned int i = 0; i < (expected_width*expected_height); ++i){
+                        *pCVMat = *pAVFrm;
+                        pAVFrm += 1;
+                        pCVMat += 2;
                     }
                     
-                    // copy U plane (need to double copy chroma components from 4:2:2 packing, 16 bit data depth)
-                    mat_start = cvFrameYUV1.ptr<uint8_t>()+4*expected_width*expected_height;
-                    for(unsigned int inidx = 0; inidx < frame->linesize[2]/2; inidx+= 1){
-                        memcpy(mat_start + 4*inidx,frame->data[2]+2*inidx,2);
-                        memcpy(mat_start + 4*inidx + 2, frame->data[2]+2*inidx,2);
+                    // copy U/Chroma
+                    //pAVFrm = (uint16_t *)frame->data[0];
+                    //pAVFrm += expected_width + expected_height;
+                    pCVMat = cvFrameYUV.ptr<uint16_t>();
+                    for(unsigned int i = 0; i < (expected_width*expected_height)/2; ++i){
+                        *pCVMat = *pAVFrm;
+                        pAVFrm += 1;
+                        pCVMat += 4;
                     }
-                    
-                    //cvFrameYUV1.convertTo(cvFrameYUV3,CV_16UC3,64.0);
 
-                    cv::cvtColor(cvFrameYUV1,cvFrameRGB,cv::COLOR_YUV2BGR_UYVY);            
+                    // copy V/Chroma
+                    //pAVFrm = (uint16_t *)frame->data[0];
+                    //pAVFrm += 1.5*(expected_width + expected_height);
+                    pCVMat = cvFrameYUV.ptr<uint16_t>();
+                    pCVMat += 2;
+                    for(unsigned int i = 0; i < (expected_width*expected_height)/2; ++i){
+                        *pCVMat = *pAVFrm;
+                        pAVFrm += 1;
+                        pCVMat += 4;
+                    }
 
-                    //cv::imshow("my window",cvFrameRGB);
-                    //cv::waitKey();
+                    std::cout << "CVMat: ";
+                    for(unsigned int i = 0; i < 32; ++i){
+                        printf("%d ",*pCVMat);
+                    }
+                    std::cout << std::endl;
 
+                    // convert from YUV422 to BGR
+                    cv::cvtColor(cvFrameYUV,cvFrameBGR,cv::COLOR_YUV2BGR_UYVY);            
+                    cv::imshow("my window",cvFrameBGR);
+                    cv::waitKey();
+/*
                     for(int line_idx = 0; line_idx < expected_height; ++line_idx){
 
                         for(int data_idx = 0; data_idx < frame->linesize[0]; data_idx += 2){
@@ -290,7 +306,7 @@ int main(void){
                         //std::cout << std::endl;
                     }
                     fclose(outfile); 
-
+*/
 
                     //
                     //sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
