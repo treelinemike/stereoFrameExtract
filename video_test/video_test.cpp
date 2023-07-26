@@ -186,8 +186,8 @@ int main(void){
     char img_filename[256];
     bool got_encoder_output = false;
 
-    cv::Mat cvFrameYUV1(expected_height, expected_width, CV_16UC1);
-    cv::Mat cvFrameYUV3(expected_height, expected_width, CV_16UC3);
+    cv::Mat cvFrameYUV1(expected_height, expected_width, CV_16UC3);
+    //cv::Mat cvFrameYUV3(expected_height, expected_width, CV_16UC1);
     cv::Mat cvFrameRGB(expected_height, expected_width, CV_16UC3);
 
     // now we start reading
@@ -273,7 +273,7 @@ int main(void){
                     
                     //cvFrameYUV1.convertTo(cvFrameYUV3,CV_16UC3,64.0);
 
-                    cv::cvtColor(cvFrameYUV3,cvFrameRGB,cv::COLOR_YUV2BGR_IYUV);            
+                    cv::cvtColor(cvFrameYUV1,cvFrameRGB,cv::COLOR_YUV2BGR_UYVY);            
 
                     //cv::imshow("my window",cvFrameRGB);
                     //cv::waitKey();
