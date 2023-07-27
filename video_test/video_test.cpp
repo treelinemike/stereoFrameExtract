@@ -289,7 +289,7 @@ int main(void){
 
                     // convert from YUV422 to BGR
                     //cvFrameYUV *= 64.0;
-                    cv::cvtColor(cvFrameYUV,cvFrameBGR,cv::COLOR_YUV2BGR_UYVY);            
+                    cv::cvtColor(cvFrameYUV,cvFrameBGR,cv::COLOR_YUV2BGR_UYVY);  // _UYNV; _UYVY;           
                     cv::imshow("my window",cvFrameBGR);
                     cv::waitKey();
 /*
