@@ -25,7 +25,7 @@ extern "C" {
 //} StreamContext;
 
 static AVFormatContext * ifmt_ctx;
-static AVFormatContext * ofmt_ctx;
+//static AVFormatContext * ofmt_ctx;
 //static StreamContext * stream_ctx;
 
 int main(void){
@@ -126,7 +126,6 @@ int main(void){
     std::cout << "Width: " << dec_ctx->width << ", Height: " << dec_ctx->height << std::endl;
     int expected_width = dec_ctx->width;
     int expected_height = dec_ctx->height;
-    int expected_pix_fmt = dec_ctx->pix_fmt;
     
     // allocate image frame
     static uint8_t *video_dst_data[4] = {NULL};
@@ -182,9 +181,6 @@ int main(void){
     }
 
     */
-    FILE *img_file;
-    char img_filename[256];
-    bool got_encoder_output = false;
 
     cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
     cv::Mat cvFrameBGR;
@@ -244,20 +240,21 @@ int main(void){
                     printf("Frame linesize[1] = U: %d\n",frame->linesize[1]);
                     printf("Frame linesize[2] = V: %d\n",frame->linesize[2]);
                         
-                    FILE * outfile;
+                    /*
+                     * FILE * outfile;
                     char outfilename[255];
                     sprintf(outfilename,"frame%02d.csv",my_frame_counter);
                     outfile = fopen(outfilename,"wb");
-                   
+                   */
                     uint16_t *pAVFrm = NULL;
-                    uint16_t *pCVMat = NULL;                    
+                    uint8_t *pCVMat = NULL;                    
                     
                     // copy Y/Luma
                     pAVFrm = (uint16_t *)frame->data[0];
-                    pCVMat = cvFrameYUV.ptr<uint16_t>();
+                    pCVMat = cvFrameYUV.ptr<uint8_t>();
                     pCVMat += 1;
-                    for(unsigned int i = 0; i < (expected_width*expected_height); ++i){
-                        *pCVMat = *pAVFrm;
+                    for(unsigned int i = 0; i < (unsigned int)(expected_width*expected_height); ++i){
+                        *pCVMat = (uint8_t)((*pAVFrm) >> 2);
                         pAVFrm += 1;
                         pCVMat += 2;
                     }
@@ -265,21 +262,22 @@ int main(void){
                     // copy U/Chroma
                     //pAVFrm = (uint16_t *)frame->data[0];
                     //pAVFrm += expected_width + expected_height;
-                    pCVMat = cvFrameYUV.ptr<uint16_t>();
-                    for(unsigned int i = 0; i < (expected_width*expected_height)/2; ++i){
-                        *pCVMat = *pAVFrm;
+                    pAVFrm = (uint16_t *)frame->data[1];
+                    pCVMat = cvFrameYUV.ptr<uint8_t>();
+                    for(unsigned int i = 0; i < (unsigned int)((expected_width*expected_height)/2); ++i){
+                        *pCVMat = (uint8_t)((*pAVFrm) >> 2);
                         pAVFrm += 1;
                         pCVMat += 4;
                     }
-
+                    
                     // copy V/Chroma
-                    //pAVFrm = (uint16_t *)frame->data[0];
-                    //pAVFrm += 1.5*(expected_width + expected_height);
-                    pCVMat = cvFrameYUV.ptr<uint16_t>();
+                    pAVFrm = (uint16_t *)frame->data[2];
+                    pAVFrm += 2;
+                    pCVMat = cvFrameYUV.ptr<uint8_t>();
                     pCVMat += 2;
-                    for(unsigned int i = 0; i < (expected_width*expected_height)/2; ++i){
-                        *pCVMat = *pAVFrm;
-                        pAVFrm += 1;
+                    for(unsigned int i = 0; i < (unsigned int)((expected_width*expected_height)/2); ++i){
+                        *pCVMat =  (uint8_t)((*pAVFrm) >> 2);
+                       pAVFrm += 1;
                         pCVMat += 4;
                     }
 
@@ -290,6 +288,7 @@ int main(void){
                     std::cout << std::endl;
 
                     // convert from YUV422 to BGR
+                    //cvFrameYUV *= 64.0;
                     cv::cvtColor(cvFrameYUV,cvFrameBGR,cv::COLOR_YUV2BGR_UYVY);            
                     cv::imshow("my window",cvFrameBGR);
                     cv::waitKey();
