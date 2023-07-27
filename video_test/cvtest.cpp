@@ -68,7 +68,8 @@ int main(void){
     }
     std::cout << std::endl;
    
-    // create YUV422 input synthetically and convert back to BGR
+    
+    // try this with *8bit* synthetic YUV422 input
     cv::Mat yuv422_test(2,4,CV_8UC2);
     cv::Mat im_bgr_4;
     std::cout << "is yuv422_test continuous? " << yuv422_test.isContinuous() << std::endl;
@@ -79,8 +80,7 @@ int main(void){
         *yuv422start = 88;
         yuv422start += 2;
     }
-   
-    
+       
     yuv422start = yuv422_test.ptr<uint8_t>();
     for(unsigned int k = 0; k < 4; ++k){
         *yuv422start = 187;
@@ -93,7 +93,6 @@ int main(void){
         yuv422start += 4;
     }
    
-
     cv::cvtColor(yuv422_test,im_bgr_4,cv::COLOR_YUV2BGR_UYVY);
     cv::imwrite("out.tif",im_bgr_4);
 
@@ -106,6 +105,54 @@ int main(void){
     std::cout << "im_bgr_4 " << im_bgr_4.size() << " (" << im_bgr_4.channels() << " ch): ";
     for( unsigned int i = 0; i < 24; ++i){
         printf("%d ",*(im_bgr_4.ptr<uint8_t>()+i));
+    }
+    std::cout << std::endl;
+
+   
+    // manual conversion of *8bit* YUV422 to BGR
+    
+
+
+
+    // repeat with *16bit* synthetic YUV422 input
+    cv::Mat yuv422_test_2(2,4,CV_16UC2);
+    cv::Mat im_bgr_5;
+    std::cout << "is yuv422_test_2 continuous? " << yuv422_test_2.isContinuous() << std::endl;
+    
+    uint16_t *yuv422start_2 = yuv422_test_2.ptr<uint16_t>();
+    yuv422start_2 += 1;
+    for(unsigned int j = 0; j < 8; ++j){
+        *yuv422start_2 = (88 << 0);
+        yuv422start_2 += 2;
+    }
+       
+    yuv422start_2 = yuv422_test_2.ptr<uint16_t>();
+    for(unsigned int k = 0; k < 4; ++k){
+        *yuv422start_2 = (187 << 0);
+        yuv422start_2 += 4;
+    }
+    yuv422start_2 = yuv422_test_2.ptr<uint16_t>();
+    yuv422start_2 += 2;
+    for(unsigned int l = 0; l < 4; ++l){
+        *yuv422start_2 = (115 << 0);
+        yuv422start_2 += 4;
+    }
+   
+    //THIS FAILS!
+    //cv::cvtColor(yuv422_test_2,im_bgr_5,cv::COLOR_YUV2BGR_UYVY,2);
+    //cv::imwrite("out_16bit.tif",im_bgr_5);
+
+
+
+    std::cout << "yuv422_test_2 " << yuv422_test_2.size() << " (" << yuv422_test_2.channels() << " ch): ";
+    for( unsigned int i = 0; i < 16; ++i){
+        printf("%d ",*(yuv422_test_2.ptr<uint16_t>()+i));
+    }
+    std::cout << std::endl;
+    
+    std::cout << "im_bgr_5 " << im_bgr_5.size() << " (" << im_bgr_5.channels() << " ch): ";
+    for( unsigned int i = 0; i < 24; ++i){
+        printf("%d ",*(im_bgr_5.ptr<uint16_t>()+i));
     }
     std::cout << std::endl;
 
