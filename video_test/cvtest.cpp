@@ -41,15 +41,15 @@ int main(void){
     
     uint8_t *yuv420start = yuv420_test.ptr<uint8_t>();
     for(unsigned int j = 0; j < 8; ++j){
-        *yuv420start = 88;
+        *yuv420start = 90;
         ++yuv420start;
     }
     for(unsigned int k = 0; k < 2; ++k){
-        *yuv420start = 187;
+        *yuv420start = 90;
         ++yuv420start;
     }
     for(unsigned int l = 0; l < 2; ++l){
-        *yuv420start = 115;
+        *yuv420start = 190;
         ++yuv420start;
     }
     
