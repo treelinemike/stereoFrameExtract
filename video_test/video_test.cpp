@@ -1,5 +1,5 @@
 // until we have a makefile or cmake, compile with:
-// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lopencv_core -lopencv_imgproc -lopencv_highgui -o video_test  
+// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lopencv_core -lopencv_imgproc -lopencv_highgui -lswscale -o video_test  
 
 // followed several ffmpeg examples to create this
 
@@ -8,6 +8,8 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libavfilter/avfilter.h>
 #include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+#include <libavutil/opt.h>
 }
 #include <iostream>
 #include <stdio.h>
@@ -181,6 +183,16 @@ int main(void){
     }
 
     */
+    std::cout << "Trying to allocate sws context..." << std::endl; 
+    SwsContext *sws_ctx;
+    sws_ctx  = sws_alloc_context();
+    //av_opt_show2(sws_ctx,stdout,AV_OPT_FLAG_VIDEO_PARAM,0); // TODO: WHY DOES THIS FAIL??
+    av_opt_set_int(sws_ctx,"sws_flags",SWS_PRINT_INFO,0);
+    av_opt_set_int(sws_ctx,"src_format",(AVPixelFormat)AV_PIX_FMT_YUV422P10,0);
+    av_opt_set_int(sws_ctx,"dst_format",(AVPixelFormat)AV_PIX_FMT_RGB24,0);
+
+                                                                                                             
+    std::cout << "All set with swscale setup" << std::endl;
 
     cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
     cv::Mat cvFrameBGR;
@@ -236,6 +248,13 @@ int main(void){
                     
                     //printf("Coded picture number: %d\n",frame->coded_picture_number); 
                     //printf("Display picture number: %d\n",frame->display_picture_number);
+                    
+                    // ideally we'd like to convert AVFrame * frame into another AVFrame with a different pixel format
+
+                    
+                    
+                    
+                    
                     printf("Frame linesize[0] = Y: %d\n",frame->linesize[0]);
                     printf("Frame linesize[1] = U: %d\n",frame->linesize[1]);
                     printf("Frame linesize[2] = V: %d\n",frame->linesize[2]);
