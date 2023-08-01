@@ -1,5 +1,5 @@
 // until we have a makefile or cmake, compile with:
-// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lopencv_core -lopencv_imgproc -lopencv_highgui -lswscale -o video_test  
+// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -o video_test  
 
 // followed several ffmpeg examples to create this
 
@@ -14,7 +14,7 @@ extern "C" {
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string>
 #include <opencv2/opencv.hpp>
 
 #define VIDEO_FILE "test_twoframe.mov"
@@ -149,7 +149,7 @@ int main(void){
     } 
     converted_frame->width = expected_width;
     converted_frame->height = expected_height;
-    converted_frame->format = AV_PIX_FMT_RGB48LE;
+    converted_frame->format = AV_PIX_FMT_BGR48LE;
     if( av_frame_get_buffer(converted_frame,0) < 0){
         std::cout << "ERROR: COULD NOT GET BUFFER FOR CONVERTED FRAME" << std::endl;
         return -1;
@@ -194,45 +194,35 @@ int main(void){
                 if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
                 
 
-                    /*
-
-                    // set frame parameters, ensuring that they haven't changed from the expected values
-                    if( (img_ctx->pix_fmt = dec_ctx->pix_fmt) != expected_pix_fmt ){
-                        std::cout << "ERROR: PIXEL FORMAT CHANGED!" << std::endl;
+                    // we have a valid AVFrame (frame) from the file video stream
+                    // this AVFrame has YUV422 pixel format, so convert it to
+                    // RGB444 (16bit) 
+                    if( sws_scale_frame(sws_ctx,converted_frame,frame) < 0){
+                        std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
                         return -1;
                     }
-                    if( (img_ctx->width = dec_ctx->width) != expected_width ){
-                        std::cout << "ERROR: WIDTH CHANGED!" << std::endl;
-                        return -1;
-                    }
-                    if( (img_ctx->height = dec_ctx->height) != expected_height ){
-                        std::cout << "ERROR: HEIGHT CHANGED!" << std::endl;
-                        return -1;
-                    }
-                    
-                    // send frame to image encoder
-                    int thisret = 0;
-                    if( (thisret = avcodec_send_frame(img_ctx, frame)) < 0){
-                        std::cout << "ERROR: COULD NOT SEND FRAME TO IMAGE ENCODER! " << thisret << std::endl;
-                        return -1;
-                    }
-
-                    // retrieve packet from encoder
-                    // TODO: add a timeout and error checking
-                    while(!avcodec_receive_packet(img_ctx,pkt_enc)){
-                    };
-*/
-        
-                    
-                    //printf("Coded picture number: %d\n",frame->coded_picture_number); 
-                    //printf("Display picture number: %d\n",frame->display_picture_number);
-                    
-                    // ideally we'd like to convert AVFrame * frame into another AVFrame with a different pixel format
-
-                    sws_scale_frame(sws_ctx,converted_frame,frame);
-                    
                     
                    
+                    // BGR48LE plays nicely with OpenCV (phew!) so just copy over
+                    cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
+                 /* 
+                    // BGR48LE plays nicely with OpenCV (phew!) so just copy over
+                    uint16_t *pCV = cv_frame_rgb.ptr<uint16_t>();
+                    uint16_t *pAV = (uint16_t *)converted_frame->data[0]; 
+                    for(unsigned int i = 0; i < (unsigned int)(3*expected_width*expected_height); ++i){
+                        *pCV = *pAV;
+                        pCV +=1;
+                        pAV += 1;
+                    }
+                   */ 
+                    char img_filename[255]; 
+                    sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
+                    //std::string img_filename_str(img_filename);
+                    cv::imwrite(img_filename,cv_frame_rgb);
+                    cv::imshow("my window",cv_frame_rgb);
+                    cv::waitKey();
+                    
+
                     /*
                     // COPY Y/U/V OVER TO AN OPENCV MATRIX, CHANGING TO 8 BITS
                     // AND DISPLAY IMAGES
@@ -260,8 +250,6 @@ int main(void){
                     }
                     
                     // copy U/Chroma
-                    //pAVFrm = (uint16_t *)frame->data[0];
-                    //pAVFrm += expected_width + expected_height;
                     pAVFrm = (uint16_t *)frame->data[1];
                     pCVMat = cvFrameYUV.ptr<uint8_t>();
                     for(unsigned int i = 0; i < (unsigned int)((expected_width*expected_height)/2); ++i){
