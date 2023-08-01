@@ -186,12 +186,23 @@ int main(void){
     std::cout << "Trying to allocate sws context..." << std::endl; 
     SwsContext *sws_ctx;
     sws_ctx  = sws_alloc_context();
-    //av_opt_show2(sws_ctx,stdout,AV_OPT_FLAG_VIDEO_PARAM,0); // TODO: WHY DOES THIS FAIL??
-    av_opt_set_int(sws_ctx,"sws_flags",SWS_PRINT_INFO,0);
+    av_opt_show2(sws_ctx,NULL,AV_OPT_FLAG_VIDEO_PARAM,0); // note: segfaults with stdout in 2nd arg... use NULL
+    
+    av_opt_set_int(sws_ctx,"src_w",expected_width,0);
+    av_opt_set_int(sws_ctx,"src_h",expected_height,0);
     av_opt_set_int(sws_ctx,"src_format",(AVPixelFormat)AV_PIX_FMT_YUV422P10,0);
+    
+    av_opt_set_int(sws_ctx,"dst_w",expected_width,0);
+    av_opt_set_int(sws_ctx,"src_h",expected_height,0);
     av_opt_set_int(sws_ctx,"dst_format",(AVPixelFormat)AV_PIX_FMT_RGB24,0);
 
-                                                                                                             
+    av_opt_set_int(sws_ctx,"sws_flags",SWS_PRINT_INFO,0);
+
+    if(sws_init_context(sws_ctx,NULL,NULL) < 0){ // no srcFilter, no dstFilter 
+        std::cout << "ERROR: COULD NOT INITIALIZE SWS CONTEXT!" << std::endl;
+        return -1;
+    }
+
     std::cout << "All set with swscale setup" << std::endl;
 
     cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
