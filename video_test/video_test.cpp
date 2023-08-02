@@ -4,12 +4,12 @@
 // followed several ffmpeg examples to create this
 
 extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libavfilter/avfilter.h>
-#include <libavutil/imgutils.h>
-#include <libswscale/swscale.h>
-#include <libavutil/opt.h>
+    #include <libavcodec/avcodec.h>
+    #include <libavformat/avformat.h>
+    #include <libavfilter/avfilter.h>
+    #include <libavutil/imgutils.h>
+    #include <libswscale/swscale.h>
+    #include <libavutil/opt.h>
 }
 #include <iostream>
 #include <stdio.h>
@@ -21,9 +21,6 @@ extern "C" {
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
 static AVFormatContext * ifmt_ctx;
-//static AVFormatContext * ofmt_ctx;
-//static StreamContext * stream_ctx;
-
 
 int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
 
@@ -83,7 +80,7 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
     }
 
     // write packet to file
-    sprintf(outfile_name,"direct%08d.tif",frame_num);
+    sprintf(outfile_name,"av_frame_%08d.tif",frame_num);
     outfile = fopen(outfile_name,"wb");
     fwrite(packet->data,1,packet->size,outfile);
     fclose(outfile);
@@ -275,6 +272,10 @@ int main(void){
                     // write frame to file using only ffmpeg (lavf, lavc, etc...)
                     write_avframe_to_file(converted_frame, my_frame_counter);
 
+                    
+                    // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
+                    // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
+                    
                     // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
                     cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
                     cv::Mat cv_frame_bgr;
@@ -282,7 +283,7 @@ int main(void){
                     
                     // write  to file
                     char img_filename[255]; 
-                    sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
+                    sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
                     cv::imwrite(img_filename,cv_frame_bgr);
                     cv::imshow("my window",cv_frame_bgr);
                     cv::waitKey();
