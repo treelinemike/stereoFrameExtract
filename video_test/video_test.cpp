@@ -38,7 +38,7 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
         std::cout << "ERROR FINDING TIFF ENCODER" << std::endl;
         return -1;
     }
-    
+
 
     if( (tiff_context = avcodec_alloc_context3(tiff_codec)) == NULL ){
         std::cout << "ERROR ALLOCATING TIFF ENCODER" << std::endl;
@@ -55,12 +55,12 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
     //av_opt_set(tiff_context->priv_data,"compression_algo","packbits",0);
     //av_opt_set(tiff_context->priv_data,"compression_algo","lzw",0);
     //av_opt_set(tiff_context->priv_data,"compression_algo","raw",0);
-    
+
     if( avcodec_open2(tiff_context, tiff_codec, NULL) < 0 ){
         std::cout << "ERROR: CANNOT OPEN TIFF CODEC" << std::endl;
         return -1;
     }
-    av_opt_show2(tiff_context,NULL,AV_OPT_FLAG_ENCODING_PARAM,0);
+    //av_opt_show2(tiff_context,NULL,AV_OPT_FLAG_ENCODING_PARAM,0);
 
     // prepare packet
     if( (packet = av_packet_alloc()) == NULL){
@@ -72,8 +72,8 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
 
     // send frame to TIFF encoder
     if(avcodec_send_frame(tiff_context, frame) < 0){
-       std::cout << "ERROR SENDING FRAME TO TIFF ENCODER" << std::endl;
-       return -1;
+        std::cout << "ERROR SENDING FRAME TO TIFF ENCODER" << std::endl;
+        return -1;
     } 
 
     // retrieve encoded TIFF packet
@@ -102,13 +102,13 @@ int main(void){
         std::cout << "Could not open " << VIDEO_FILE << std::endl;
         return -1;
     }
-  
+
     // get stream info from file
     if( avformat_find_stream_info( ifmt_ctx, NULL ) < 0){
         std::cout << "avformat_find_stream_info() failed!" << std::endl;
         return -1;
     }
-    
+
     // print video format info to screen
     std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
     av_dump_format(ifmt_ctx, 0, VIDEO_FILE, false);
@@ -120,11 +120,11 @@ int main(void){
     for(unsigned int stream_idx = 0; stream_idx < ifmt_ctx->nb_streams; ++stream_idx){
         AVStream *stream = ifmt_ctx->streams[stream_idx];
         AVCodecParameters *codec_params = stream->codecpar;
-    
+
         printf("Located stream %02d: codec type = %03d, codec id = %03d\n",
-            stream_idx,
-            codec_params->codec_type,
-            codec_params->codec_id);
+                stream_idx,
+                codec_params->codec_type,
+                codec_params->codec_id);
 
         // determine whether this is v210 encoded video
         if( codec_params->codec_type == AVMEDIA_TYPE_VIDEO && codec_params->codec_id == AV_CODEC_ID_V210){
@@ -144,7 +144,7 @@ int main(void){
         std::cout << "ERROR: DID NOT FIND A VIDEO STREAM" << std::endl;
         return -1;
     }
-    
+
     // report success
     AVStream *stream = ifmt_ctx->streams[video_stream_idx];
     AVCodecParameters *codec_params = stream->codecpar;
@@ -187,7 +187,7 @@ int main(void){
     int expected_width = dec_ctx->width;
     int expected_height = dec_ctx->height;
     AVPixelFormat expected_fmt = dec_ctx->pix_fmt;
-    
+
     // allocate image frame
     static uint8_t *video_dst_data[4] = {NULL};
     static int video_dst_linesize[4];
@@ -195,7 +195,7 @@ int main(void){
         std::cout << "ERROR: COULD NOT ALLOCATE IMAGE" << std::endl;
         return -1;
     }
-    
+
     // allocate pointers for a packet and a frame
     AVPacket *pkt = NULL;
     pkt = av_packet_alloc();
@@ -203,14 +203,14 @@ int main(void){
         std::cout << "ERROR: COULD NOT ALLOCATE DECODER PACKET POINTER" << std::endl;
         return -1;
     }
-    
+
     static AVFrame *frame = NULL;
     frame = av_frame_alloc();
     if(!frame){
         std::cout << "ERROR: COULD NOT ALLOCATE FRAME POINTER" << std::endl;
         return -1;
     }
-    
+
     AVFrame *converted_frame = NULL;
     converted_frame = av_frame_alloc();
     if(!frame){
@@ -228,15 +228,15 @@ int main(void){
     // create software scaling context (for colorspace / pixel format conversion, not scaling...)
     SwsContext *sws_ctx = NULL;  
     if( (sws_ctx = sws_getContext(  expected_width,
-                                    expected_height,
-                                    expected_fmt,
-                                    converted_frame->width,
-                                    converted_frame->height,
-                                    (AVPixelFormat)converted_frame->format,
-                                    SWS_POINT,
-                                    nullptr,
-                                    nullptr,
-                                    nullptr)) == NULL){
+                    expected_height,
+                    expected_fmt,
+                    converted_frame->width,
+                    converted_frame->height,
+                    (AVPixelFormat)converted_frame->format,
+                    SWS_POINT,
+                    nullptr,
+                    nullptr,
+                    nullptr)) == NULL){
         std::cout << "ERROR: COULD NOT GET/ALLOCATE SWS CONTEXT" << std::endl;
         return -1;
     }
@@ -251,7 +251,7 @@ int main(void){
     while( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) >= 0 ){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
             // example "demux_decode.c" has a function: decode_packet(dec_ctx, pkt);
-            
+
             // send packet to the decoder
             if( avcodec_send_packet(dec_ctx,pkt) < 0){
                 std::cout << "ERROR: COULD NOT SEND PACKET TO DECODER" << std::endl;
@@ -262,124 +262,35 @@ int main(void){
             int retval = 0;
             while( retval >= 0 ){
                 if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
-                
+
 
                     // we have a valid AVFrame (frame) from the file video stream
                     // this AVFrame has YUV422 pixel format, so convert it to
-                    // RGB444 (16bit) 
+                    // RGB444 (16bit)
                     if( sws_scale_frame(sws_ctx,converted_frame,frame) < 0){
                         std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
                         return -1;
                     }
-                    
-
+                
                     // write frame to file using only ffmpeg (lavf, lavc, etc...)
                     write_avframe_to_file(converted_frame, my_frame_counter);
 
-                    // BGR48LE plays nicely with OpenCV (phew!) so just copy over
+                    // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
                     cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
-                 /* 
-                    // BGR48LE plays nicely with OpenCV (phew!) so just copy over
-                    uint16_t *pCV = cv_frame_rgb.ptr<uint16_t>();
-                    uint16_t *pAV = (uint16_t *)converted_frame->data[0]; 
-                    for(unsigned int i = 0; i < (unsigned int)(3*expected_width*expected_height); ++i){
-                        *pCV = *pAV;
-                        pCV +=1;
-                        pAV += 1;
-                    }
-                   */ 
+                    cv::Mat cv_frame_bgr;
+                    cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
+                    
+                    // write  to file
                     char img_filename[255]; 
                     sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
-                    //std::string img_filename_str(img_filename);
-                    cv::imwrite(img_filename,cv_frame_rgb);
-                    cv::imshow("my window",cv_frame_rgb);
-                    cv::waitKey();
-                    
-
-                    /*
-                    // COPY Y/U/V OVER TO AN OPENCV MATRIX, CHANGING TO 8 BITS
-                    // AND DISPLAY IMAGES
-                    printf("Frame linesize[0] = Y: %d\n",frame->linesize[0]);
-                    printf("Frame linesize[1] = U: %d\n",frame->linesize[1]);
-                    printf("Frame linesize[2] = V: %d\n",frame->linesize[2]);
-                        
-                    // initialize output csv file for raw dump
-                    //FILE * outfile;
-                    //char outfilename[255];
-                    //sprintf(outfilename,"frame%02d.csv",my_frame_counter);
-                    //outfile = fopen(outfilename,"wb");
-                   
-                    uint16_t *pAVFrm = NULL;
-                    uint8_t *pCVMat = NULL;                    
-                    
-                    // copy Y/Luma
-                    pAVFrm = (uint16_t *)frame->data[0];
-                    pCVMat = cvFrameYUV.ptr<uint8_t>();
-                    pCVMat += 1;
-                    for(unsigned int i = 0; i < (unsigned int)(expected_width*expected_height); ++i){
-                        *pCVMat = (uint8_t)((*pAVFrm) >> 2);
-                        pAVFrm += 1;
-                        pCVMat += 2;
-                    }
-                    
-                    // copy U/Chroma
-                    pAVFrm = (uint16_t *)frame->data[1];
-                    pCVMat = cvFrameYUV.ptr<uint8_t>();
-                    for(unsigned int i = 0; i < (unsigned int)((expected_width*expected_height)/2); ++i){
-                        *pCVMat = (uint8_t)((*pAVFrm) >> 2);
-                        pAVFrm += 1;
-                        pCVMat += 4;
-                    }
-                    
-                    // copy V/Chroma
-                    pAVFrm = (uint16_t *)frame->data[2];
-                    pAVFrm += 2;
-                    pCVMat = cvFrameYUV.ptr<uint8_t>();
-                    pCVMat += 2;
-                    for(unsigned int i = 0; i < (unsigned int)((expected_width*expected_height)/2); ++i){
-                        *pCVMat =  (uint8_t)((*pAVFrm) >> 2);
-                       pAVFrm += 1;
-                        pCVMat += 4;
-                    }
-
-                    std::cout << "CVMat: ";
-                    for(unsigned int i = 0; i < 32; ++i){
-                        printf("%d ",*pCVMat);
-                    }
-                    std::cout << std::endl;
-
-                    // convert from YUV422 to BGR
-                    //cvFrameYUV *= 64.0;
-                    cv::cvtColor(cvFrameYUV,cvFrameBGR,cv::COLOR_YUV2BGR_UYVY);  // _UYNV; _UYVY;           
-                    cv::imshow("my window",cvFrameBGR);
+                    cv::imwrite(img_filename,cv_frame_bgr);
+                    cv::imshow("my window",cv_frame_bgr);
                     cv::waitKey();
 
-                    // write to csv file
-                    //for(int line_idx = 0; line_idx < expected_height; ++line_idx){
-
-                      //  for(int data_idx = 0; data_idx < frame->linesize[0]; data_idx += 2){
-                        //    uint16_t grayval = 0;
-                          //  memcpy(&grayval,data_start+line_idx*(frame->linesize[0])+data_idx,2);
-                            //fprintf(outfile,"%04u ",grayval);
-                            //std::cout << ".";
-                        //}
-                        //fprintf(outfile,"\n");
-                        //std::cout << std::endl;
-                    //}
-                    //fclose(outfile); 
-*/
-
-                    //
-                    //sprintf(img_filename,"frame%08d.tiff",my_frame_counter);
-                    //img_file = fopen(img_filename,"wb");
-                    //fwrite(pkt_enc->data,1,pkt_enc->size,img_file);
-                    //fclose(img_file);
-                    
                     // we received a valid frame, so increment counter
                     ++my_frame_counter;
-                
                 }
-                
+
                 // unreference the frame pointer
                 av_frame_unref(frame);
             }        
@@ -394,40 +305,40 @@ int main(void){
     // done
     return 0;
 }
- 
+
 
 
 
 
 /*  OLD CODE TRYING OUT ENCODER
-    // get our encoder ready
-    AVCodec *tiff_codec = NULL;
-    if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL){
-        std::cout << "ERROR: COULD NOT FIND OUTPUT IMAGE ENCODER" << std::endl;
-        return -1;
-    }
+// get our encoder ready
+AVCodec *tiff_codec = NULL;
+if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL){
+std::cout << "ERROR: COULD NOT FIND OUTPUT IMAGE ENCODER" << std::endl;
+return -1;
+}
 
-    AVCodecContext * img_ctx = NULL;
-    if( !(img_ctx = avcodec_alloc_context3(tiff_codec)) ){
-        std::cout << "ERROR: COULD NOT ALLOCATE CONTEXT FOR IMAGES" << std::endl;
-        return -1;
-    }
-    img_ctx->pix_fmt = AV_PIX_FMT_YUV420P;//AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
-    img_ctx->time_base = (AVRational){1,1};
-    img_ctx->width = expected_width;
-    img_ctx->height = expected_height;
-    // initialize encoder
-    std::cout << "test" << std::endl;
-    if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
-        std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-        return -1;
-    }
-    
-    AVPacket *pkt_enc = NULL;
-    pkt_enc = av_packet_alloc();
-    if(!pkt_enc){
-        std::cout << "ERROR: COULD NOT ALLOCATE ENCODER PACKET POINTER" << std::endl;
-        return -1;
-    }
+AVCodecContext * img_ctx = NULL;
+if( !(img_ctx = avcodec_alloc_context3(tiff_codec)) ){
+std::cout << "ERROR: COULD NOT ALLOCATE CONTEXT FOR IMAGES" << std::endl;
+return -1;
+}
+img_ctx->pix_fmt = AV_PIX_FMT_YUV420P;//AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
+img_ctx->time_base = (AVRational){1,1};
+img_ctx->width = expected_width;
+img_ctx->height = expected_height;
+// initialize encoder
+std::cout << "test" << std::endl;
+if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
+std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+return -1;
+}
 
-    */
+AVPacket *pkt_enc = NULL;
+pkt_enc = av_packet_alloc();
+if(!pkt_enc){
+std::cout << "ERROR: COULD NOT ALLOCATE ENCODER PACKET POINTER" << std::endl;
+return -1;
+}
+
+*/
