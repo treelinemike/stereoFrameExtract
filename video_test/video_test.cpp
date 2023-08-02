@@ -24,6 +24,76 @@ static AVFormatContext * ifmt_ctx;
 //static AVFormatContext * ofmt_ctx;
 //static StreamContext * stream_ctx;
 
+
+int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
+
+    const AVCodec *tiff_codec = NULL;
+    AVCodecContext *tiff_context = NULL;
+    AVPacket *packet = NULL;
+    FILE *outfile;
+    char outfile_name[256];
+
+    // find encoder
+    if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL ){
+        std::cout << "ERROR FINDING TIFF ENCODER" << std::endl;
+        return -1;
+    }
+    
+
+    if( (tiff_context = avcodec_alloc_context3(tiff_codec)) == NULL ){
+        std::cout << "ERROR ALLOCATING TIFF ENCODER" << std::endl;
+        return -1;
+    }
+
+    tiff_context->pix_fmt = (AVPixelFormat) frame->format;
+    tiff_context->height = frame->height;
+    tiff_context->width = frame->width;
+    tiff_context->time_base = AVRational{1,10};
+
+    // set compression type (given in smallest to largest file order)
+    av_opt_set(tiff_context->priv_data,"compression_algo","deflate",0);
+    //av_opt_set(tiff_context->priv_data,"compression_algo","packbits",0);
+    //av_opt_set(tiff_context->priv_data,"compression_algo","lzw",0);
+    //av_opt_set(tiff_context->priv_data,"compression_algo","raw",0);
+    
+    if( avcodec_open2(tiff_context, tiff_codec, NULL) < 0 ){
+        std::cout << "ERROR: CANNOT OPEN TIFF CODEC" << std::endl;
+        return -1;
+    }
+    av_opt_show2(tiff_context,NULL,AV_OPT_FLAG_ENCODING_PARAM,0);
+
+    // prepare packet
+    if( (packet = av_packet_alloc()) == NULL){
+        std::cout << "ERROR: CANNOT ALLOCATE PACKET" << std::endl;
+        return -1;
+    }
+    packet->data = NULL;
+    packet->size = 0;
+
+    // send frame to TIFF encoder
+    if(avcodec_send_frame(tiff_context, frame) < 0){
+       std::cout << "ERROR SENDING FRAME TO TIFF ENCODER" << std::endl;
+       return -1;
+    } 
+
+    // retrieve encoded TIFF packet
+    if(avcodec_receive_packet(tiff_context,packet) < 0){
+        std::cout << "ERROR RETRIEVING PACKET FROM TIFF ENCODER" << std::endl;
+        return -1;
+    }
+
+    // write packet to file
+    sprintf(outfile_name,"direct%08d.tif",frame_num);
+    outfile = fopen(outfile_name,"wb");
+    fwrite(packet->data,1,packet->size,outfile);
+    fclose(outfile);
+
+    // clean up
+    av_packet_unref(packet);
+    avcodec_close(tiff_context);
+    return 0;
+}
+
 int main(void){
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
 
@@ -149,7 +219,7 @@ int main(void){
     } 
     converted_frame->width = expected_width;
     converted_frame->height = expected_height;
-    converted_frame->format = AV_PIX_FMT_BGR48LE;
+    converted_frame->format = AV_PIX_FMT_RGB48LE;
     if( av_frame_get_buffer(converted_frame,0) < 0){
         std::cout << "ERROR: COULD NOT GET BUFFER FOR CONVERTED FRAME" << std::endl;
         return -1;
@@ -202,7 +272,10 @@ int main(void){
                         return -1;
                     }
                     
-                   
+
+                    // write frame to file using only ffmpeg (lavf, lavc, etc...)
+                    write_avframe_to_file(converted_frame, my_frame_counter);
+
                     // BGR48LE plays nicely with OpenCV (phew!) so just copy over
                     cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
                  /* 
