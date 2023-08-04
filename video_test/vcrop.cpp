@@ -17,13 +17,17 @@ extern "C" {
 #include <string>
 #include <opencv2/opencv.hpp>
 
+#define OUTFILE_NAME "out.mov"
 #define VIDEO_FILE "test_twoframe.mov"
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
-static AVFormatContext * ifmt_ctx;
 
 
 int main(void){
+
+    static AVFormatContext * ifmt_ctx; // input format context
+    static AVFormatContext * ofmt_ctx; // output format context
+
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
 
     // open video file and read headers
@@ -142,6 +146,83 @@ int main(void){
         return -1;
     }
 
+
+
+    // output format context
+    if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,OUTFILE_NAME) < 0) {
+        std::cout << "ERROR: COULD NOT CREATE OUTPUT CONTEXT" << std::endl;
+        return -1;
+    }
+    
+    // single output stream for video
+    AVStream * out_stream;
+    if( (out_stream = avformat_new_stream(ofmt_ctx,NULL)) == NULL ){
+        std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
+        return -1;
+    }
+
+    // copy codec parameters from input stream
+    if( avcodec_parameters_copy(out_stream->codecpar,stream->codecpar)){
+        std::cout << "ERROR: COULD NOT COPY CODEC PARAMETERS FROM INPUT STREAM TO OUTPUT STREAM" << std::endl;
+        return -1;
+    }
+
+    // open the output file
+    if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
+        std::cout << "Trying to open output file..." << std::endl;
+        if( avio_open(&ofmt_ctx->pb,OUTFILE_NAME,AVIO_FLAG_WRITE ) < 0){
+            std::cout << "ERROR: COULD NOT OPEN OUTPUT FILE" << std::endl;
+            return -1;
+        }
+    }
+
+    // write header
+    if( avformat_write_header(ofmt_ctx, NULL) < 0){
+        std::cout << "ERROR: COULD NOT WRITE OUTPUT FILE HEADER" << std::endl;
+        return -1;
+    }
+
+
+
+
+    // now we start reading
+    unsigned int my_frame_counter = 0;
+    bool done_decoding = false;
+
+    while( av_read_frame(ifmt_ctx,pkt) >= 0 ){
+        if((unsigned int)(pkt->stream_index) == video_stream_idx){
+
+            std::cout << "Adding packet of size: " << pkt->size << std::endl;
+            
+            // add packet to new video file
+            if( av_interleaved_write_frame(ofmt_ctx, pkt) < 0){
+                std::cout << "ERROR: COULD NOT WRTIE PACKET TO OUTPUT STREAM" << std::endl;
+                return -1;
+            }
+
+
+            ++my_frame_counter;
+        }
+
+        // unreference the packet pointer
+        av_packet_unref(pkt);
+    
+    }
+
+    std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
+
+    if( av_write_trailer(ofmt_ctx) ){
+        std::cout << "ERROR WRITING OUTPUT FILE TRAILER" << std::endl;
+        return -1;
+    }
+
+    // done
+    return 0;
+}
+
+
+/*
+
     // prepare an ENCODER to reencode video
     const AVCodec *enc = NULL;
     enc = avcodec_find_encoder(stream->codecpar->codec_id);
@@ -176,47 +257,8 @@ int main(void){
 
 
 
-    // initialize some OpenCV matrices 
-    cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
-    cv::Mat cvFrameBGR;
+   */
 
-    // now we start reading
-    unsigned int my_frame_counter = 0;
-    int avreadframe_ret = 123;
-    while( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) >= 0 ){
-        if((unsigned int)(pkt->stream_index) == video_stream_idx){
-            // example "demux_decode.c" has a function: decode_packet(dec_ctx, pkt);
-
-            // send packet to the decoder
-            if( avcodec_send_packet(dec_ctx,pkt) < 0){
-                std::cout << "ERROR: COULD NOT SEND PACKET TO DECODER" << std::endl;
-                return -1;
-            }
-
-            // get all available frames from the decoder
-            int retval = 0;
-            while( retval >= 0 ){
-                if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
-
-
-                    // we received a valid frame, so increment counter
-                    ++my_frame_counter;
-                }
-
-                // unreference the frame pointer
-                av_frame_unref(frame);
-            }        
-        }
-
-        // unreference the packet pointer
-        av_packet_unref(pkt);
-    }
-
-    std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
-
-    // done
-    return 0;
-}
 
 
 
