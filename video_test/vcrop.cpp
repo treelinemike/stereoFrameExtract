@@ -1,7 +1,11 @@
 // until we have a makefile or cmake, compile with:
 // g++ -Wall -I/usr/include/opencv4 vcrop.cpp -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -o vcrop  
 
-// followed several ffmpeg examples to create this
+// extracts a clip of v210 video 
+// by demuxing out of one MOV wrapper and muxing into another
+// should excatly preserve frames!
+
+// followed several examples to put this together
 
 extern "C" {
     #include <libavcodec/avcodec.h>
@@ -21,12 +25,20 @@ extern "C" {
 #define VIDEO_FILE "test_twoframe.mov"
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
-
-
 int main(void){
 
     static AVFormatContext * ifmt_ctx; // input format context
+    AVStream *istream;
+    
     static AVFormatContext * ofmt_ctx; // output format context
+    AVStream * ostream;
+    
+    AVCodecParameters * codec_params;
+    AVPacket * pkt = NULL;
+    
+    unsigned int video_stream_idx = 0;
+    bool found_video_stream = false;
+    unsigned int my_frame_counter = 0;
 
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
 
@@ -48,12 +60,9 @@ int main(void){
     std::cout << std::endl;
 
     // look for a single v210 video stream in this container
-    unsigned int video_stream_idx = 0;
-    bool found_video_stream = false;
     for(unsigned int stream_idx = 0; stream_idx < ifmt_ctx->nb_streams; ++stream_idx){
-        AVStream *stream = ifmt_ctx->streams[stream_idx];
-        AVCodecParameters *codec_params = stream->codecpar;
-
+        istream = ifmt_ctx->streams[stream_idx];
+        codec_params =istream->codecpar;
         printf("Located stream %02d: codec type = %03d, codec id = %03d\n",
                 stream_idx,
                 codec_params->codec_type,
@@ -79,90 +88,36 @@ int main(void){
     }
 
     // report success
-    AVStream *stream = ifmt_ctx->streams[video_stream_idx];
-    AVCodecParameters *codec_params = stream->codecpar;
+    istream = ifmt_ctx->streams[video_stream_idx];
+    codec_params = istream->codecpar;
     printf("Working with stream %02d: codec type = %03d, codec id = %03d\n",
             video_stream_idx,
             codec_params->codec_type,
             codec_params->codec_id);
-    std::cout << "stream timebase: " << (stream->time_base).num << "/" << (stream->time_base).den << std::endl;
-
-    // open the decoder
-    const AVCodec *dec = NULL;
-    dec = avcodec_find_decoder(stream->codecpar->codec_id);
-    if(!dec){
-        std::cout << "ERROR: COULD NOT FIND DECODER" << std::endl;
-        return -1;
-    }
-
-    // allocate decoder context
-    AVCodecContext *dec_ctx;
-    dec_ctx = avcodec_alloc_context3(dec);
-    if(!dec_ctx){
-        std::cout << "ERROR: COULD NOT OPEN DECODER CONTEXT" << std::endl;
-        return -1;
-    }
-
-    // copy codec parameters from stream to decoder
-    if( avcodec_parameters_to_context(dec_ctx, stream->codecpar) < 0){
-        std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO DECODER" << std::endl;
-        return -1;
-    }
-
-    // initialize decoder
-    if( avcodec_open2(dec_ctx, dec, NULL) < 0){
-        std::cout << "ERROR: COULD NOT INITIALIZE DECODER" << std::endl;
-        return -1;
-    }
-
-    // report frame width and height
-    std::cout << "Width: " << dec_ctx->width << ", Height: " << dec_ctx->height << std::endl;
-    int expected_width = dec_ctx->width;
-    int expected_height = dec_ctx->height;
-    AVPixelFormat expected_fmt = dec_ctx->pix_fmt;
-    //std::cout << "decoder timebase: " << (dec_ctx->time_base).num << "/" << (dec_ctx->time_base).den << std::endl;
+    std::cout << "stream timebase: " << (istream->time_base).num << "/" << (istream->time_base).den << std::endl;
 
 
-    // allocate image frame
-    static uint8_t *video_dst_data[4] = {NULL};
-    static int video_dst_linesize[4];
-    if( av_image_alloc(video_dst_data, video_dst_linesize, dec_ctx->width, dec_ctx->height, dec_ctx->pix_fmt, 1) < 0){
-        std::cout << "ERROR: COULD NOT ALLOCATE IMAGE" << std::endl;
-        return -1;
-    }
-
-    // allocate pointers for a packet and a frame
-    AVPacket *pkt = NULL;
+    // allocate packet pointer
     pkt = av_packet_alloc();
     if(!pkt){
         std::cout << "ERROR: COULD NOT ALLOCATE DECODER PACKET POINTER" << std::endl;
         return -1;
     }
 
-    static AVFrame *frame = NULL;
-    frame = av_frame_alloc();
-    if(!frame){
-        std::cout << "ERROR: COULD NOT ALLOCATE FRAME POINTER" << std::endl;
-        return -1;
-    }
-
-
-
-    // output format context
+    // allocate output format context
     if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,OUTFILE_NAME) < 0) {
         std::cout << "ERROR: COULD NOT CREATE OUTPUT CONTEXT" << std::endl;
         return -1;
     }
     
     // single output stream for video
-    AVStream * out_stream;
-    if( (out_stream = avformat_new_stream(ofmt_ctx,NULL)) == NULL ){
+    if( (ostream = avformat_new_stream(ofmt_ctx,NULL)) == NULL ){
         std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
         return -1;
     }
 
     // copy codec parameters from input stream
-    if( avcodec_parameters_copy(out_stream->codecpar,stream->codecpar)){
+    if( avcodec_parameters_copy(ostream->codecpar,istream->codecpar)){
         std::cout << "ERROR: COULD NOT COPY CODEC PARAMETERS FROM INPUT STREAM TO OUTPUT STREAM" << std::endl;
         return -1;
     }
@@ -186,9 +141,6 @@ int main(void){
 
 
     // now we start reading
-    unsigned int my_frame_counter = 0;
-    bool done_decoding = false;
-
     while( av_read_frame(ifmt_ctx,pkt) >= 0 ){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
 
