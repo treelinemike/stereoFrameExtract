@@ -22,8 +22,8 @@ extern "C" {
 #include <opencv2/opencv.hpp>
 
 #define OUTFILE_NAME "out.mov"
-#define VIDEO_FILE "test_twoframe.mov"
-//#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
+//#define VIDEO_FILE "test_twoframe.mov"
+#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
 int main(void){
 
@@ -59,7 +59,7 @@ int main(void){
     av_dump_format(ifmt_ctx, 0, VIDEO_FILE, false);
     std::cout << std::endl;
 
-    // look for a single v210 video stream in this container
+    // look for a single v210-encoded video stream in this container
     for(unsigned int stream_idx = 0; stream_idx < ifmt_ctx->nb_streams; ++stream_idx){
         istream = ifmt_ctx->streams[stream_idx];
         codec_params =istream->codecpar;
@@ -138,15 +138,27 @@ int main(void){
     }
 
 
+    /*if( av_seek_frame(ifmt_ctx,-1,2488360,AVSEEK_FLAG_BYTE) < 0){
+        std::cout << "ERROR: SEEK FAILED" << std::endl;
+        return -1;
+    }*/
 
-
+    
     // now we start reading
-    while( av_read_frame(ifmt_ctx,pkt) >= 0 ){
+    while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < 20){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
 
-            std::cout << "Adding packet of size: " << pkt->size << std::endl;
-            
+            // skip this packet if it is flagged to discard
+            if(pkt->flags & AV_PKT_FLAG_DISCARD){
+                std::cout << "Discard packet..." << std::endl;
+                continue;
+            }
+
+            //std::cout << "Adding packet of size: " << pkt->size << std::endl;
+            printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",pkt->pts,pkt->dts,pkt->pos, (pkt->flags & AV_PKT_FLAG_KEY) ); 
+
             // add packet to new video file
+            pkt->stream_index = ostream->index;
             if( av_interleaved_write_frame(ofmt_ctx, pkt) < 0){
                 std::cout << "ERROR: COULD NOT WRTIE PACKET TO OUTPUT STREAM" << std::endl;
                 return -1;
