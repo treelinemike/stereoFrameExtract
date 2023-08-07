@@ -25,6 +25,9 @@ extern "C" {
 //#define VIDEO_FILE "test_twoframe.mov"
 #define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
+#define FIRSTFRAME 21208 
+#define LASTFRAME  21952
+
 int main(void){
 
     static AVFormatContext * ifmt_ctx; // input format context
@@ -38,7 +41,9 @@ int main(void){
     
     unsigned int video_stream_idx = 0;
     bool found_video_stream = false;
-    unsigned int my_frame_counter = 0;
+    uint64_t my_frame_counter = 0;
+    uint64_t num_frames_to_extract = (LASTFRAME-FIRSTFRAME+1);
+    int prev_pct = -1;
 
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
 
@@ -115,7 +120,7 @@ int main(void){
         std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
         return -1;
     }
-    std::cout << "Output stream index: " << ostream->index << std::endl;
+    //std::cout << "Output stream index: " << ostream->index << std::endl;
 
     // copy codec parameters from input stream
     if( avcodec_parameters_copy(ostream->codecpar,istream->codecpar)){
@@ -124,22 +129,23 @@ int main(void){
     }
 
     // a few more important parameters
-    ostream->time_base = istream->time_base;
     ostream->sample_aspect_ratio.num = 1;
     ostream->sample_aspect_ratio.den = 1;
-    ostream->id = 5;
-
-    std::cout << "OUT STREAM ID " << ostream->id << std::endl;
-    std::cout << "CODEC SAR: " << istream->codecpar->sample_aspect_ratio.num << ":" << istream->codecpar->sample_aspect_ratio.den << std::endl;
-    std::cout << "STREAM SAR: " << ostream->sample_aspect_ratio.num << ":" << ostream->sample_aspect_ratio.den << std::endl;
+    ostream->time_base = istream->time_base;
+    uint64_t pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base),av_inv_q(istream->avg_frame_rate)));
+    
+    //std::cout << "SCALE FACTOR: " << pts_dts_scale << std::endl;
+    //std::cout << "OUT STREAM ID " << ostream->id << std::endl;
+    //std::cout << "CODEC SAR: " << istream->codecpar->sample_aspect_ratio.num << ":" << istream->codecpar->sample_aspect_ratio.den << std::endl;
+    //std::cout << "STREAM SAR: " << ostream->sample_aspect_ratio.num << ":" << ostream->sample_aspect_ratio.den << std::endl;
+    
     // open the output file
     if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
-        std::cout << "Trying to open output file..." << std::endl;
+        std::cout << "Opening output file" << std::endl;
         if( avio_open(&ofmt_ctx->pb,OUTFILE_NAME,AVIO_FLAG_WRITE ) < 0){
             std::cout << "ERROR: COULD NOT OPEN OUTPUT FILE" << std::endl;
             return -1;
         }
-        std::cout << "Output file open" << std::endl;
     }
 
     // write header
@@ -150,15 +156,14 @@ int main(void){
 
 
     std::cout << "Seeking to desired frame" << std::endl;
-    if( av_seek_frame(ifmt_ctx,video_stream_idx,21600000,0) < 0){
+    if( av_seek_frame(ifmt_ctx,video_stream_idx,FIRSTFRAME*pts_dts_scale,0) < 0){
         std::cout << "ERROR: SEEK FAILED" << std::endl;
         return -1;
     }
-    std::cout << "Done seeking" << std::endl;
-
-    
+    std::cout << "Copying frames to new container" << std::endl;
+ 
     // now we start reading
-    while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < 120){
+    while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < num_frames_to_extract){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
 
             // skip this packet if it is flagged to discard
@@ -168,12 +173,12 @@ int main(void){
             }
 
             //std::cout << "Adding packet of size: " << pkt->size << std::endl;
-            printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",pkt->pts,pkt->dts,pkt->pos, (pkt->flags & AV_PKT_FLAG_KEY) ); 
+            //printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",pkt->pts,pkt->dts,pkt->pos, (pkt->flags & AV_PKT_FLAG_KEY) ); 
 
 
             // correct PTS and DTS for output stream
-            pkt->pts = my_frame_counter * 1001;
-            pkt->dts = my_frame_counter * 1001;
+            pkt->pts = my_frame_counter * pts_dts_scale;
+            pkt->dts = my_frame_counter * pts_dts_scale;
 
             // add packet to new video file
             pkt->stream_index = ostream->index;
@@ -184,15 +189,22 @@ int main(void){
 
 
             ++my_frame_counter;
+
+            if((int)((my_frame_counter*100)/num_frames_to_extract) > prev_pct ){
+               prev_pct = (int)((my_frame_counter*100)/num_frames_to_extract);  
+               printf("\r%4d%% (%8ld/%8ld)",prev_pct,my_frame_counter,num_frames_to_extract);
+               fflush(stdout);
+            }
         }
 
         // unreference the packet pointer
         av_packet_unref(pkt);
     
     }
+    std::cout << std::endl;
+    std::cout << "Processed " << my_frame_counter << " frames" << std::endl;
 
-    std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
-
+    std::cout << "Writing trailer" << std::endl;
     if( av_write_trailer(ofmt_ctx) ){
         std::cout << "ERROR WRITING OUTPUT FILE TRAILER" << std::endl;
         return -1;
