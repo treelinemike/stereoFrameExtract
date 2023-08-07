@@ -1,5 +1,5 @@
 INCLUDE_SYS = /usr/local/include
-INCLUDE = ~/include ./include /usr/include/opencv4
+INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include
 LIB = /usr/local/lib
 
 CC = g++

@@ -1,9 +1,6 @@
-// until we have a makefile or cmake, compile with:
-// g++ -Wall vcrop.cpp -lavutil -lavformat -lavcodec -o vcrop  
-
 // extracts a clip of v210 video 
-// by demuxing out of one MOV wrapper and muxing into another
-// should excatly preserve frames!
+// by demuxing packets out of one MOV wrapper and muxing them directly back into another
+// should preserve exact frames!
 
 // followed several examples to put this together
 
@@ -17,15 +14,17 @@ extern "C" {
     #include <libavutil/opt.h>
 }
 #include <iostream>
+#include <string>
+#include <cxxopts.hpp>  // https://www.github.com/jarro2783/cxxopts
 
-#define OUTFILE_NAME "out.mov"
+//#define OUTFILE_NAME "out.mov"
 //#define VIDEO_FILE "test_twoframe.mov"
-#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
+//#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
-#define FIRSTFRAME 21208 
-#define LASTFRAME  21952
+//#define FIRSTFRAME 21208 
+//#define LASTFRAME  21952
 
-int main(void){
+int main(int argc, char ** argv){
 
     static AVFormatContext * ifmt_ctx; // input format context
     AVStream *istream;
@@ -39,14 +38,29 @@ int main(void){
     unsigned int video_stream_idx = 0;
     bool found_video_stream = false;
     uint64_t my_frame_counter = 0;
-    uint64_t num_frames_to_extract = (LASTFRAME-FIRSTFRAME+1);
+    uint64_t firstframe, lastframe, num_frames_to_extract;
     int prev_pct = -1;
+    cxxopts::Options options("vcrop","temporal video cropping");
 
-    std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
+    // add options
+    options.add_options()
+        ("f,first" , "Number of first frame to include in output video", cxxopts::value<uint64_t>())
+        ("l,last"  , "Number of last frame to inclue in output video", cxxopts::value<uint64_t>())
+        ("o,output", "Name of output file", cxxopts::value<std::string>())
+        ("i,input" , "Name of input file", cxxopts::value<std::string>());
+    options.parse_positional({"first","last","output","input"});
+    auto cxxopts_result = options.parse(argc,argv);
+
+    // figure out how many frames we are extracting
+    firstframe = cxxopts_result["first"].as<uint64_t>();
+    lastframe  = cxxopts_result["last"].as<uint64_t>();
+    num_frames_to_extract = (lastframe-firstframe+1);
+
+    std::cout << "Analyzing " << cxxopts_result["input"].as<std::string>() << "..." << std::endl;
 
     // open video file and read headers
-    if( avformat_open_input(&ifmt_ctx, VIDEO_FILE, NULL, NULL) != 0 ){
-        std::cout << "Could not open " << VIDEO_FILE << std::endl;
+    if( avformat_open_input(&ifmt_ctx, cxxopts_result["input"].as<std::string>().c_str(), NULL, NULL) != 0 ){
+        std::cout << "Could not open " << cxxopts_result["input"].as<std::string>() << std::endl;
         return -1;
     }
 
@@ -58,7 +72,7 @@ int main(void){
 
     // print video format info to screen
     std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
-    av_dump_format(ifmt_ctx, 0, VIDEO_FILE, false);
+    av_dump_format(ifmt_ctx, 0, cxxopts_result["input"].as<std::string>().c_str(), false);
     std::cout << std::endl;
 
     // look for a single v210-encoded video stream in this container
@@ -107,7 +121,7 @@ int main(void){
     }
 
     // allocate output format context
-    if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,OUTFILE_NAME) < 0) {
+    if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,cxxopts_result["output"].as<std::string>().c_str()) < 0) {
         std::cout << "ERROR: COULD NOT CREATE OUTPUT CONTEXT" << std::endl;
         return -1;
     }
@@ -139,7 +153,7 @@ int main(void){
     // open the output file
     if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
         std::cout << "Opening output file" << std::endl;
-        if( avio_open(&ofmt_ctx->pb,OUTFILE_NAME,AVIO_FLAG_WRITE ) < 0){
+        if( avio_open(&ofmt_ctx->pb,cxxopts_result["output"].as<std::string>().c_str(),AVIO_FLAG_WRITE ) < 0){
             std::cout << "ERROR: COULD NOT OPEN OUTPUT FILE" << std::endl;
             return -1;
         }
@@ -153,7 +167,7 @@ int main(void){
 
 
     std::cout << "Seeking to desired frame" << std::endl;
-    if( av_seek_frame(ifmt_ctx,video_stream_idx,FIRSTFRAME*pts_dts_scale,0) < 0){
+    if( av_seek_frame(ifmt_ctx,video_stream_idx,firstframe*pts_dts_scale,0) < 0){
         std::cout << "ERROR: SEEK FAILED" << std::endl;
         return -1;
     }
