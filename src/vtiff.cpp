@@ -1,5 +1,4 @@
-// until we have a makefile or cmake, compile with:
-// g++ -Wall -I/usr/include/opencv4 video_test.cpp -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -o video_test  
+// extract frames from a v210-encoded MOV video file to 16-bit RGB TIFF  
 
 // followed several ffmpeg examples to create this
 
@@ -12,10 +11,8 @@ extern "C" {
     #include <libavutil/opt.h>
 }
 #include <iostream>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <string>
 #include <opencv2/opencv.hpp>
+#include <cxxopts.hpp>
 
 //#define VIDEO_FILE "test_twoframe.mov"
 #define VIDEO_FILE "20230521_0deg_cal_L01.mov"
