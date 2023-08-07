@@ -1,5 +1,5 @@
 // until we have a makefile or cmake, compile with:
-// g++ -Wall -I/usr/include/opencv4 vcrop.cpp -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs -o vcrop  
+// g++ -Wall vcrop.cpp -lavutil -lavformat -lavcodec -o vcrop  
 
 // extracts a clip of v210 video 
 // by demuxing out of one MOV wrapper and muxing into another
@@ -7,6 +7,7 @@
 
 // followed several examples to put this together
 
+// need extern to include FFmpeg C libraries
 extern "C" {
     #include <libavcodec/avcodec.h>
     #include <libavformat/avformat.h>
@@ -16,10 +17,6 @@ extern "C" {
     #include <libavutil/opt.h>
 }
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string>
-#include <opencv2/opencv.hpp>
 
 #define OUTFILE_NAME "out.mov"
 //#define VIDEO_FILE "test_twoframe.mov"

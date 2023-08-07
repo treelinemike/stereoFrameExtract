@@ -12,9 +12,9 @@ extern "C" {
     #include <libavutil/opt.h>
 }
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string>
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <string>
 #include <opencv2/opencv.hpp>
 
 //#define VIDEO_FILE "test_twoframe.mov"
