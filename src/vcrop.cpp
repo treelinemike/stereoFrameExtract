@@ -41,8 +41,12 @@ int main(int argc, char ** argv){
     uint64_t firstframe, lastframe, num_frames_to_extract;
     int prev_pct = -1;
     cxxopts::Options options("vcrop","temporal video cropping");
-
+    std::string infile_name, outfile_name;
+    
+    
     // add options
+    try
+    {
     options.add_options()
         ("f,first" , "Number of first frame to include in output video", cxxopts::value<uint64_t>())
         ("l,last"  , "Number of last frame to inclue in output video", cxxopts::value<uint64_t>())
@@ -56,11 +60,20 @@ int main(int argc, char ** argv){
     lastframe  = cxxopts_result["last"].as<uint64_t>();
     num_frames_to_extract = (lastframe-firstframe+1);
 
-    std::cout << "Analyzing " << cxxopts_result["input"].as<std::string>() << "..." << std::endl;
+    // get filenames
+    infile_name = cxxopts_result["input"].as<std::string>(); 
+    outfile_name = cxxopts_result["output"].as<std::string>(); 
+    }
+    catch(const cxxopts::exceptions::exception &e)
+    {
+        std::cout << "Error parsing options: " << e.what() << std::endl;
+        return -1;
+    }
+    std::cout << "Analyzing " << infile_name << "..." << std::endl;
 
     // open video file and read headers
-    if( avformat_open_input(&ifmt_ctx, cxxopts_result["input"].as<std::string>().c_str(), NULL, NULL) != 0 ){
-        std::cout << "Could not open " << cxxopts_result["input"].as<std::string>() << std::endl;
+    if( avformat_open_input(&ifmt_ctx, infile_name.c_str(), NULL, NULL) != 0 ){
+        std::cout << "Could not open " << infile_name << std::endl;
         return -1;
     }
 
@@ -72,7 +85,7 @@ int main(int argc, char ** argv){
 
     // print video format info to screen
     std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
-    av_dump_format(ifmt_ctx, 0, cxxopts_result["input"].as<std::string>().c_str(), false);
+    av_dump_format(ifmt_ctx, 0, infile_name.c_str(), false);
     std::cout << std::endl;
 
     // look for a single v210-encoded video stream in this container
@@ -121,7 +134,7 @@ int main(int argc, char ** argv){
     }
 
     // allocate output format context
-    if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,cxxopts_result["output"].as<std::string>().c_str()) < 0) {
+    if( avformat_alloc_output_context2(&ofmt_ctx,NULL,NULL,outfile_name.c_str()) < 0) {
         std::cout << "ERROR: COULD NOT CREATE OUTPUT CONTEXT" << std::endl;
         return -1;
     }
@@ -153,7 +166,7 @@ int main(int argc, char ** argv){
     // open the output file
     if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
         std::cout << "Opening output file" << std::endl;
-        if( avio_open(&ofmt_ctx->pb,cxxopts_result["output"].as<std::string>().c_str(),AVIO_FLAG_WRITE ) < 0){
+        if( avio_open(&ofmt_ctx->pb,outfile_name.c_str(),AVIO_FLAG_WRITE ) < 0){
             std::cout << "ERROR: COULD NOT OPEN OUTPUT FILE" << std::endl;
             return -1;
         }
