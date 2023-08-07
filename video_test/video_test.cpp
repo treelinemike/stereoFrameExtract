@@ -17,8 +17,8 @@ extern "C" {
 #include <string>
 #include <opencv2/opencv.hpp>
 
-#define VIDEO_FILE "test_twoframe.mov"
-//#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
+//#define VIDEO_FILE "test_twoframe.mov"
+#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
 static AVFormatContext * ifmt_ctx;
 
@@ -259,6 +259,9 @@ int main(void){
             int retval = 0;
             while( retval >= 0 ){
                 if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
+
+                    //std::cout << "Frame " << my_frame_counter;
+                    //std::cout << "; Keyframe? " << (frame->flags | AV_FRAME_FLAG_KEY) << std::endl;
 
 
                     // we have a valid AVFrame (frame) from the file video stream

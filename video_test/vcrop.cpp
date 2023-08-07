@@ -115,6 +115,7 @@ int main(void){
         std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
         return -1;
     }
+    std::cout << "Output stream index: " << ostream->index << std::endl;
 
     // copy codec parameters from input stream
     if( avcodec_parameters_copy(ostream->codecpar,istream->codecpar)){
@@ -122,6 +123,15 @@ int main(void){
         return -1;
     }
 
+    // a few more important parameters
+    ostream->time_base = istream->time_base;
+    ostream->sample_aspect_ratio.num = 1;
+    ostream->sample_aspect_ratio.den = 1;
+    ostream->id = 5;
+
+    std::cout << "OUT STREAM ID " << ostream->id << std::endl;
+    std::cout << "CODEC SAR: " << istream->codecpar->sample_aspect_ratio.num << ":" << istream->codecpar->sample_aspect_ratio.den << std::endl;
+    std::cout << "STREAM SAR: " << ostream->sample_aspect_ratio.num << ":" << ostream->sample_aspect_ratio.den << std::endl;
     // open the output file
     if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
         std::cout << "Trying to open output file..." << std::endl;
@@ -129,6 +139,7 @@ int main(void){
             std::cout << "ERROR: COULD NOT OPEN OUTPUT FILE" << std::endl;
             return -1;
         }
+        std::cout << "Output file open" << std::endl;
     }
 
     // write header
@@ -138,14 +149,16 @@ int main(void){
     }
 
 
-    /*if( av_seek_frame(ifmt_ctx,-1,2488360,AVSEEK_FLAG_BYTE) < 0){
+    std::cout << "Seeking to desired frame" << std::endl;
+    if( av_seek_frame(ifmt_ctx,video_stream_idx,21600000,0) < 0){
         std::cout << "ERROR: SEEK FAILED" << std::endl;
         return -1;
-    }*/
+    }
+    std::cout << "Done seeking" << std::endl;
 
     
     // now we start reading
-    while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < 20){
+    while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < 120){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
 
             // skip this packet if it is flagged to discard
@@ -156,6 +169,11 @@ int main(void){
 
             //std::cout << "Adding packet of size: " << pkt->size << std::endl;
             printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",pkt->pts,pkt->dts,pkt->pos, (pkt->flags & AV_PKT_FLAG_KEY) ); 
+
+
+            // correct PTS and DTS for output stream
+            pkt->pts = my_frame_counter * 1001;
+            pkt->dts = my_frame_counter * 1001;
 
             // add packet to new video file
             pkt->stream_index = ostream->index;
