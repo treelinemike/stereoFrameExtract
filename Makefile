@@ -1,5 +1,5 @@
 INCLUDE_SYS = /usr/local/include
-INCLUDE = ~/include ./include
+INCLUDE = ~/include ./include /usr/include/opencv4
 LIB = /usr/local/lib
 
 CC = g++
@@ -14,9 +14,17 @@ LIB_PARAMS = $(addprefix -L,$(LIB))
 default: vcrop vtiff
 
 vcrop: vcrop.o
-   $(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_CROP)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_CROP)
 
 vtiff: vtiff.o
-   $(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_TIFF)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_TIFF)
 
-vcrop.o : 
+vcrop.o: ./src/vcrop.cpp
+	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
+
+vtiff.o: ./src/vtiff.cpp
+	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
+
+clean:
+	rm -r *.o
+	
