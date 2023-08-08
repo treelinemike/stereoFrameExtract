@@ -17,7 +17,7 @@ extern "C" {
 #include <cxxopts.hpp>
 
 //#define VIDEO_FILE "test_twoframe.mov"
-#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
+//#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
 
 static AVFormatContext * ifmt_ctx;
 
@@ -97,6 +97,7 @@ int main(int argc, char ** argv){
     std::vector<uint64_t> framelist;
     std::string temp, line, word;
     std::fstream framelist_file;
+    uint64_t pts_dts_scale;
 
     // add options
     try
@@ -130,11 +131,11 @@ int main(int argc, char ** argv){
     for(auto & val : framelist)
         std::cout << " " << val << std::endl;
 
-    std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
+    std::cout << "Analyzing " << input_file_name << "..." << std::endl;
 
     // open video file and read headers
-    if( avformat_open_input(&ifmt_ctx, VIDEO_FILE, NULL, NULL) != 0 ){
-        std::cout << "Could not open " << VIDEO_FILE << std::endl;
+    if( avformat_open_input(&ifmt_ctx, input_file_name.c_str(), NULL, NULL) != 0 ){
+        std::cout << "Could not open " << input_file_name << std::endl;
         return -1;
     }
 
@@ -146,7 +147,7 @@ int main(int argc, char ** argv){
 
     // print video format info to screen
     std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
-    av_dump_format(ifmt_ctx, 0, VIDEO_FILE, false);
+    av_dump_format(ifmt_ctx, 0, input_file_name.c_str(), false);
     std::cout << std::endl;
 
     // look for a single v210 video stream in this container
@@ -183,6 +184,8 @@ int main(int argc, char ** argv){
     // report success
     AVStream *stream = ifmt_ctx->streams[video_stream_idx];
     AVCodecParameters *codec_params = stream->codecpar;
+    pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(stream->time_base),av_inv_q(stream->avg_frame_rate)));
+
     printf("Working with stream %02d: codec type = %03d, codec id = %03d\n",
             video_stream_idx,
             codec_params->codec_type,
@@ -285,66 +288,79 @@ int main(int argc, char ** argv){
     int avreadframe_ret = 123;
 
     // TODO: SEEK HERE TO EACH FRAME
+    for(auto & val : framelist){
 
-
-    while( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) >= 0 ){
-        if(((unsigned int)(pkt->stream_index) == video_stream_idx) && 
-                (std::find(framelist.begin(), framelist.end(), my_frame_counter) != framelist.end())){
-            // example "demux_decode.c" has a function: decode_packet(dec_ctx, pkt);
-
-            // send packet to the decoder
-            if( avcodec_send_packet(dec_ctx,pkt) < 0){
-                std::cout << "ERROR: COULD NOT SEND PACKET TO DECODER" << std::endl;
+        std::cout << "Seeking to frame " << val << std::endl;
+        if( av_seek_frame(ifmt_ctx,video_stream_idx,val*pts_dts_scale,0) < 0){
+            std::cout << "ERROR: SEEK FAILED" << std::endl;
+            return -1;
+        }
+        bool found_frame = false;
+        while(!found_frame){
+            if( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) < 0 ){
+                std::cout << "ERROR: COULD NOT READ FRAME" << std::endl;
                 return -1;
             }
+            if(((unsigned int)(pkt->stream_index) == video_stream_idx)){
 
-            // get all available frames from the decoder
-            int retval = 0;
-            while( retval >= 0 ){
-                if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
-
-                    //std::cout << "Frame " << my_frame_counter;
-                    //std::cout << "; Keyframe? " << (frame->flags | AV_FRAME_FLAG_KEY) << std::endl;
-
-
-                    // we have a valid AVFrame (frame) from the file video stream
-                    // this AVFrame has YUV422 pixel format, so convert it to
-                    // RGB444 (16bit)
-                    if( sws_scale_frame(sws_ctx,converted_frame,frame) < 0){
-                        std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
-                        return -1;
-                    }
-
-                    // write frame to file using only ffmpeg (lavf, lavc, etc...)
-                    write_avframe_to_file(converted_frame, my_frame_counter);
-
-
-                    // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
-                    // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
-
-                    // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
-                    cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
-                    cv::Mat cv_frame_bgr;
-                    cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
-
-                    // write  to file
-                    char img_filename[255]; 
-                    sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
-                    cv::imwrite(img_filename,cv_frame_bgr);
-                    cv::imshow("my window",cv_frame_bgr);
-                    cv::waitKey();
-
-                    // we received a valid frame, so increment counter
-                    ++my_frame_counter;
+                std::cout << "DTS: " << pkt->dts << "; PTS: " << pkt->pts << std::endl;
+                
+                if( (uint64_t)pkt->dts != val*pts_dts_scale){
+                    std::cout << "ERROR: MISSED THE DESIRED FRAME!" << std::endl;
+                } else {
+                    found_frame = true;
                 }
 
-                // unreference the frame pointer
-                av_frame_unref(frame);
-            }        
-        }
+                // send packet to the decoder
+                if( avcodec_send_packet(dec_ctx,pkt) < 0){
+                    std::cout << "ERROR: COULD NOT SEND PACKET TO DECODER" << std::endl;
+                    return -1;
+                }
 
-        // unreference the packet pointer
-        av_packet_unref(pkt);
+                // get all available frames from the decoder
+                int retval = 0;
+                while( retval >= 0 ){
+                    if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
+
+                        // we have a valid AVFrame (frame) from the file video stream
+                        // this AVFrame has YUV422 pixel format, so convert it to
+                        // RGB444 (16bit)
+                        if( sws_scale_frame(sws_ctx,converted_frame,frame) < 0){
+                            std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
+                            return -1;
+                        }
+
+                        // write frame to file using only ffmpeg (lavf, lavc, etc...)
+                        write_avframe_to_file(converted_frame, my_frame_counter);
+
+
+                        // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
+                        // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
+
+                        // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
+                        cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
+                        cv::Mat cv_frame_bgr;
+                        cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
+
+                        // write  to file
+                        char img_filename[255]; 
+                        sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
+                        cv::imwrite(img_filename,cv_frame_bgr);
+                        cv::imshow("my window",cv_frame_bgr);
+                        cv::waitKey();
+
+                        // we received a valid frame, so increment counter
+                        ++my_frame_counter;
+                    }
+
+                    // unreference the frame pointer
+                    av_frame_unref(frame);
+                }        
+            }
+
+            // unreference the packet pointer
+            av_packet_unref(pkt);
+        }
     }
 
     std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;

@@ -38,7 +38,7 @@ int main(int argc, char ** argv){
     unsigned int video_stream_idx = 0;
     bool found_video_stream = false;
     uint64_t my_frame_counter = 0;
-    uint64_t firstframe, lastframe, num_frames_to_extract;
+    uint64_t firstframe, lastframe, num_frames_to_extracti, pts_dts_scale;
     int prev_pct = -1;
     cxxopts::Options options("vcrop","temporal video cropping");
     std::string infile_name, outfile_name;
@@ -155,7 +155,7 @@ int main(int argc, char ** argv){
     ostream->sample_aspect_ratio.num = 1;
     ostream->sample_aspect_ratio.den = 1;
     ostream->time_base = istream->time_base;
-    uint64_t pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base),av_inv_q(istream->avg_frame_rate)));
+    pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base),av_inv_q(istream->avg_frame_rate)));
 
     //std::cout << "SCALE FACTOR: " << pts_dts_scale << std::endl;
     //std::cout << "OUT STREAM ID " << ostream->id << std::endl;
