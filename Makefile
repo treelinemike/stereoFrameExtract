@@ -15,9 +15,11 @@ default: vcrop vtiff
 
 vcrop: vcrop.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_CROP)
+	rm -f vcrop.o
 
 vtiff: vtiff.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_TIFF)
+	rm -f vtiff.o
 
 vcrop.o: ./src/vcrop.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
@@ -26,5 +28,5 @@ vtiff.o: ./src/vtiff.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
 
 clean:
-	rm -r *.o
+	rm -f vcrop vtiff
 	

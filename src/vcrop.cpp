@@ -6,12 +6,12 @@
 
 // need extern to include FFmpeg C libraries
 extern "C" {
-    #include <libavcodec/avcodec.h>
-    #include <libavformat/avformat.h>
-    #include <libavfilter/avfilter.h>
-    #include <libavutil/imgutils.h>
-    #include <libswscale/swscale.h>
-    #include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavfilter/avfilter.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+#include <libavutil/opt.h>
 }
 #include <iostream>
 #include <string>
@@ -28,13 +28,13 @@ int main(int argc, char ** argv){
 
     static AVFormatContext * ifmt_ctx; // input format context
     AVStream *istream;
-    
+
     static AVFormatContext * ofmt_ctx; // output format context
     AVStream * ostream;
-    
+
     AVCodecParameters * codec_params;
     AVPacket * pkt = NULL;
-    
+
     unsigned int video_stream_idx = 0;
     bool found_video_stream = false;
     uint64_t my_frame_counter = 0;
@@ -42,27 +42,26 @@ int main(int argc, char ** argv){
     int prev_pct = -1;
     cxxopts::Options options("vcrop","temporal video cropping");
     std::string infile_name, outfile_name;
-    
-    
+
     // add options
     try
     {
-    options.add_options()
-        ("f,first" , "Number of first frame to include in output video", cxxopts::value<uint64_t>())
-        ("l,last"  , "Number of last frame to inclue in output video", cxxopts::value<uint64_t>())
-        ("o,output", "Name of output file", cxxopts::value<std::string>())
-        ("i,input" , "Name of input file", cxxopts::value<std::string>());
-    options.parse_positional({"first","last","output","input"});
-    auto cxxopts_result = options.parse(argc,argv);
+        options.add_options()
+            ("f,first" , "Number of first frame to include in output video", cxxopts::value<uint64_t>())
+            ("l,last"  , "Number of last frame to inclue in output video", cxxopts::value<uint64_t>())
+            ("o,output", "Name of output file", cxxopts::value<std::string>())
+            ("i,input" , "Name of input file", cxxopts::value<std::string>());
+        options.parse_positional({"first","last","output","input"});
+        auto cxxopts_result = options.parse(argc,argv);
 
-    // figure out how many frames we are extracting
-    firstframe = cxxopts_result["first"].as<uint64_t>();
-    lastframe  = cxxopts_result["last"].as<uint64_t>();
-    num_frames_to_extract = (lastframe-firstframe+1);
+        // figure out how many frames we are extracting
+        firstframe = cxxopts_result["first"].as<uint64_t>();
+        lastframe  = cxxopts_result["last"].as<uint64_t>();
+        num_frames_to_extract = (lastframe-firstframe+1);
 
-    // get filenames
-    infile_name = cxxopts_result["input"].as<std::string>(); 
-    outfile_name = cxxopts_result["output"].as<std::string>(); 
+        // get filenames
+        infile_name = cxxopts_result["input"].as<std::string>(); 
+        outfile_name = cxxopts_result["output"].as<std::string>(); 
     }
     catch(const cxxopts::exceptions::exception &e)
     {
@@ -138,7 +137,7 @@ int main(int argc, char ** argv){
         std::cout << "ERROR: COULD NOT CREATE OUTPUT CONTEXT" << std::endl;
         return -1;
     }
-    
+
     // single output stream for video
     if( (ostream = avformat_new_stream(ofmt_ctx,NULL)) == NULL ){
         std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
@@ -157,12 +156,12 @@ int main(int argc, char ** argv){
     ostream->sample_aspect_ratio.den = 1;
     ostream->time_base = istream->time_base;
     uint64_t pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base),av_inv_q(istream->avg_frame_rate)));
-    
+
     //std::cout << "SCALE FACTOR: " << pts_dts_scale << std::endl;
     //std::cout << "OUT STREAM ID " << ostream->id << std::endl;
     //std::cout << "CODEC SAR: " << istream->codecpar->sample_aspect_ratio.num << ":" << istream->codecpar->sample_aspect_ratio.den << std::endl;
     //std::cout << "STREAM SAR: " << ostream->sample_aspect_ratio.num << ":" << ostream->sample_aspect_ratio.den << std::endl;
-    
+
     // open the output file
     if( !(ofmt_ctx->oformat->flags & AVFMT_NOFILE)){
         std::cout << "Opening output file" << std::endl;
@@ -185,7 +184,7 @@ int main(int argc, char ** argv){
         return -1;
     }
     std::cout << "Copying frames to new container" << std::endl;
- 
+
     // now we start reading
     while( av_read_frame(ifmt_ctx,pkt) >= 0 && my_frame_counter < num_frames_to_extract){
         if((unsigned int)(pkt->stream_index) == video_stream_idx){
@@ -215,15 +214,15 @@ int main(int argc, char ** argv){
             ++my_frame_counter;
 
             if((int)((my_frame_counter*100)/num_frames_to_extract) > prev_pct ){
-               prev_pct = (int)((my_frame_counter*100)/num_frames_to_extract);  
-               printf("\r%4d%% (%8ld/%8ld)",prev_pct,my_frame_counter,num_frames_to_extract);
-               fflush(stdout);
+                prev_pct = (int)((my_frame_counter*100)/num_frames_to_extract);  
+                printf("\r%4d%% (%8ld/%8ld)",prev_pct,my_frame_counter,num_frames_to_extract);
+                fflush(stdout);
             }
         }
 
         // unreference the packet pointer
         av_packet_unref(pkt);
-    
+
     }
     std::cout << std::endl;
     std::cout << "Processed " << my_frame_counter << " frames" << std::endl;
@@ -241,41 +240,41 @@ int main(int argc, char ** argv){
 
 /*
 
-    // prepare an ENCODER to reencode video
-    const AVCodec *enc = NULL;
-    enc = avcodec_find_encoder(stream->codecpar->codec_id);
-    if(!enc){
-        std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
-        return -1;
-    }
+// prepare an ENCODER to reencode video
+const AVCodec *enc = NULL;
+enc = avcodec_find_encoder(stream->codecpar->codec_id);
+if(!enc){
+std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
+return -1;
+}
 
-    // allocate encoder context
-    AVCodecContext *enc_ctx;
-    enc_ctx = avcodec_alloc_context3(enc);
-    if(!enc_ctx){
-        std::cout << "ERROR: COULD NOT OPEN ENCODER CONTEXT" << std::endl;
-        return -1;
-    }
+// allocate encoder context
+AVCodecContext *enc_ctx;
+enc_ctx = avcodec_alloc_context3(enc);
+if(!enc_ctx){
+std::cout << "ERROR: COULD NOT OPEN ENCODER CONTEXT" << std::endl;
+return -1;
+}
 
-    // copy codec parameters from stream to encoder
-    if( avcodec_parameters_to_context(enc_ctx, stream->codecpar) < 0){
-        std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO ENCODER" << std::endl;
-        return -1;
-    }
+// copy codec parameters from stream to encoder
+if( avcodec_parameters_to_context(enc_ctx, stream->codecpar) < 0){
+std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO ENCODER" << std::endl;
+return -1;
+}
 
-    // set encoder timebase
-    enc_ctx->time_base = stream->time_base;
+// set encoder timebase
+enc_ctx->time_base = stream->time_base;
 
-    // initialize encoder
-    if( avcodec_open2(enc_ctx, enc, NULL) < 0){
-        std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-        return -1;
-    }
-
-
+// initialize encoder
+if( avcodec_open2(enc_ctx, enc, NULL) < 0){
+std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+return -1;
+}
 
 
-   */
+
+
+*/
 
 
 

@@ -3,14 +3,16 @@
 // followed several ffmpeg examples to create this
 
 extern "C" {
-    #include <libavcodec/avcodec.h>
-    #include <libavformat/avformat.h>
-    #include <libavfilter/avfilter.h>
-    #include <libavutil/imgutils.h>
-    #include <libswscale/swscale.h>
-    #include <libavutil/opt.h>
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavfilter/avfilter.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+#include <libavutil/opt.h>
 }
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <opencv2/opencv.hpp>
 #include <cxxopts.hpp>
 
@@ -88,7 +90,46 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
     return 0;
 }
 
-int main(void){
+int main(int argc, char ** argv){
+
+    cxxopts::Options options("vtiff","video frame extraction to tiff");
+    std::string framelist_file_name, input_file_name;    
+    std::vector<uint64_t> framelist;
+    std::string temp, line, word;
+    std::fstream framelist_file;
+
+    // add options
+    try
+    {
+        options.add_options()
+            ("f,framelist" , "Number of first frame to include in output video", cxxopts::value<std::string>())
+            ("i,input" , "Name of input file", cxxopts::value<std::string>());
+        options.parse_positional({"framelist","input"});
+        auto cxxopts_result = options.parse(argc,argv);
+
+        // get filenames
+        framelist_file_name = cxxopts_result["framelist"].as<std::string>(); 
+        input_file_name = cxxopts_result["input"].as<std::string>(); 
+    }
+    catch(const cxxopts::exceptions::exception &e)
+    {
+        std::cout << "Error parsing options: " << e.what() << std::endl;
+        return -1;
+    }
+
+    // load framelist csv into a vector
+    framelist_file.open(framelist_file_name, std::ios::in); 
+    framelist.clear();
+    while( std::getline(framelist_file, line) ){
+        std::stringstream s(line);
+        while(std::getline(s,word,',')){
+            framelist.push_back((uint64_t)std::stol(word));
+        }
+    }
+    std::cout << "Extracting frames: " << std::endl;
+    for(auto & val : framelist)
+        std::cout << " " << val << std::endl;
+
     std::cout << "Analyzing " << VIDEO_FILE << "..." << std::endl;
 
     // open video file and read headers
@@ -242,8 +283,13 @@ int main(void){
     // now we start reading
     unsigned int my_frame_counter = 0;
     int avreadframe_ret = 123;
+
+    // TODO: SEEK HERE TO EACH FRAME
+
+
     while( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) >= 0 ){
-        if((unsigned int)(pkt->stream_index) == video_stream_idx){
+        if(((unsigned int)(pkt->stream_index) == video_stream_idx) && 
+                (std::find(framelist.begin(), framelist.end(), my_frame_counter) != framelist.end())){
             // example "demux_decode.c" has a function: decode_packet(dec_ctx, pkt);
 
             // send packet to the decoder
@@ -268,19 +314,19 @@ int main(void){
                         std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
                         return -1;
                     }
-                
+
                     // write frame to file using only ffmpeg (lavf, lavc, etc...)
                     write_avframe_to_file(converted_frame, my_frame_counter);
 
-                    
+
                     // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
                     // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
-                    
+
                     // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
                     cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
                     cv::Mat cv_frame_bgr;
                     cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
-                    
+
                     // write  to file
                     char img_filename[255]; 
                     sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
