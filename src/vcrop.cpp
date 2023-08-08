@@ -37,16 +37,41 @@ int main(int argc, char ** argv){
     cxxopts::Options options("vcrop","temporal video cropping");
     std::string infile_name, outfile_name;
 
+    // struct and vector for storing clip details
+    struct ClipDef {
+        std::string name;
+        uint64_t first_frame;
+        uint64_t last_frame;
+    };
+    std::vector<ClipDef> clips;
+
     // add options
     try
     {
         options.add_options()
-            ("f,first" , "Number of first frame to include in output video", cxxopts::value<uint64_t>())
-            ("l,last"  , "Number of last frame to inclue in output video", cxxopts::value<uint64_t>())
-            ("o,output", "Name of output file", cxxopts::value<std::string>())
-            ("i,input" , "Name of input file", cxxopts::value<std::string>());
-        options.parse_positional({"first","last","output","input"});
+            ("f,first" , "number of first frame to include in output video", cxxopts::value<uint64_t>())
+            ("l,last"  , "number of last frame to inclue in output video", cxxopts::value<uint64_t>())
+            ("o,output", "name of output file", cxxopts::value<std::string>())
+            ("i,input" , "name of input file", cxxopts::value<std::string>())
+            ("c,config", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
         auto cxxopts_result = options.parse(argc,argv);
+
+        if( cxxopts_result.count("config") == 1 )
+        {
+            std::cout << "YAML MODE" << std::endl;
+        } else if( 
+                (cxxopts_result.count("first") == 1) &&
+                (cxxopts_result.count("last") == 1) &&
+                (cxxopts_result.count("output") == 1) &&
+                (cxxopts_result.count("input") == 1)) {
+            std::cout << "SINGLE CLIP MODE" << std::endl;
+        } else {
+            std::cout << options.help() << std::endl;
+            return -1;
+        }
+             
+        std::cout << "Count on 'first': " << cxxopts_result.count("first") << std::endl;
+
 
         // figure out how many frames we are extracting
         firstframe = cxxopts_result["first"].as<uint64_t>();
