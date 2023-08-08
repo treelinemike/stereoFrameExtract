@@ -16,13 +16,7 @@ extern "C" {
 #include <iostream>
 #include <string>
 #include <cxxopts.hpp>  // https://www.github.com/jarro2783/cxxopts
-
-//#define OUTFILE_NAME "out.mov"
-//#define VIDEO_FILE "test_twoframe.mov"
-//#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
-
-//#define FIRSTFRAME 21208 
-//#define LASTFRAME  21952
+#include <yaml.h>
 
 int main(int argc, char ** argv){
 
@@ -38,7 +32,7 @@ int main(int argc, char ** argv){
     unsigned int video_stream_idx = 0;
     bool found_video_stream = false;
     uint64_t my_frame_counter = 0;
-    uint64_t firstframe, lastframe, num_frames_to_extracti, pts_dts_scale;
+    uint64_t firstframe, lastframe, num_frames_to_extract, pts_dts_scale;
     int prev_pct = -1;
     cxxopts::Options options("vcrop","temporal video cropping");
     std::string infile_name, outfile_name;

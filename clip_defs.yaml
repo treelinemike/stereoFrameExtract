@@ -1,0 +1,6 @@
+input_file: 20230521_0deg_cal_L01.mov
+compress: false
+clips:
+  - name: 20230521_0deg_cal_L_001.mov
+    first: 21208
+    last:  21952

@@ -1,10 +1,10 @@
 INCLUDE_SYS = /usr/local/include
-INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include
-LIB = /usr/local/lib
+INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include /usr/local/include/yaml-cpp
+LIB = /usr/local/lib /usr/local/lib/cmake/yaml-cpp
 
 CC = g++
 CFLAGS = -no-pie -pthread -Wall
-LD_FLAGS_CROP = -lavutil -lavformat -lavcodec
+LD_FLAGS_CROP = -lavutil -lavformat -lavcodec -lyaml-cpp
 LD_FLAGS_TIFF = -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
 
 INC_SYS_PARAMS = $(addprefix -isystem,$(INCLUDE_SYS))
