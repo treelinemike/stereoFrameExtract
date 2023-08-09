@@ -35,7 +35,8 @@ int main(int argc, char ** argv){
     uint64_t firstframe, lastframe, num_frames_to_extract, pts_dts_scale;
     int prev_pct = -1;
     cxxopts::Options options("vcrop","temporal video cropping");
-    std::string infile_name, outfile_name;
+    std::string infile_name, outfile_name, yamlfile_name;
+    bool yaml_mode = false;
 
     // struct and vector for storing clip details
     struct ClipDef {
@@ -53,40 +54,44 @@ int main(int argc, char ** argv){
             ("l,last"  , "number of last frame to inclue in output video", cxxopts::value<uint64_t>())
             ("o,output", "name of output file", cxxopts::value<std::string>())
             ("i,input" , "name of input file", cxxopts::value<std::string>())
-            ("c,config", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
+            ("c,config", "Name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
         auto cxxopts_result = options.parse(argc,argv);
 
         if( cxxopts_result.count("config") == 1 )
         {
-            std::cout << "YAML MODE" << std::endl;
+            yaml_mode = true;
         } else if( 
                 (cxxopts_result.count("first") == 1) &&
                 (cxxopts_result.count("last") == 1) &&
                 (cxxopts_result.count("output") == 1) &&
                 (cxxopts_result.count("input") == 1)) {
-            std::cout << "SINGLE CLIP MODE" << std::endl;
+            yaml_mode = false;
+            firstframe = cxxopts_result["first"].as<uint64_t>();
+            lastframe  = cxxopts_result["last"].as<uint64_t>();
+            num_frames_to_extract = (lastframe-firstframe+1);
+            infile_name = cxxopts_result["input"].as<std::string>(); 
+            outfile_name = cxxopts_result["output"].as<std::string>(); 
+            
+            // add our single clip to the clip storage vector
+            struct ClipDef singleclip = {outfile_name, firstframe, lastframe};
+            clips.push_back(singleclip);
+
         } else {
             std::cout << options.help() << std::endl;
             return -1;
         }
-             
-        std::cout << "Count on 'first': " << cxxopts_result.count("first") << std::endl;
-
-
-        // figure out how many frames we are extracting
-        firstframe = cxxopts_result["first"].as<uint64_t>();
-        lastframe  = cxxopts_result["last"].as<uint64_t>();
-        num_frames_to_extract = (lastframe-firstframe+1);
-
-        // get filenames
-        infile_name = cxxopts_result["input"].as<std::string>(); 
-        outfile_name = cxxopts_result["output"].as<std::string>(); 
     }
     catch(const cxxopts::exceptions::exception &e)
     {
         std::cout << "Error parsing options: " << e.what() << std::endl;
         return -1;
     }
+
+    // parse YAML and add each clip to the clip storage vector
+    if(yaml_mode){
+    }
+
+
     std::cout << "Analyzing " << infile_name << "..." << std::endl;
 
     // open video file and read headers

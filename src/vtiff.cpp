@@ -98,19 +98,31 @@ int main(int argc, char ** argv){
     std::string temp, line, word;
     std::fstream framelist_file;
     uint64_t pts_dts_scale;
+    bool crop_flag = false;
+    bool display_flag = false;
 
     // add options
     try
     {
         options.add_options()
-            ("f,framelist" , "Number of first frame to include in output video", cxxopts::value<std::string>())
-            ("i,input" , "Name of input file", cxxopts::value<std::string>());
-        options.parse_positional({"framelist","input"});
+            ("c,crop", "boolean flag for cropping to da Vinci Xi frame",cxxopts::value<bool>()->default_value("false"))
+            ("d,display", "display extracted frames using OpenCV",cxxopts::value<bool>()->default_value("false"))
+            ("f,framelist" , "csv file containing frame numbers to extract", cxxopts::value<std::string>())
+            ("i,input" , "name of input file", cxxopts::value<std::string>());
         auto cxxopts_result = options.parse(argc,argv);
+        
+        // show help if not enough options given
+        if(     (cxxopts_result.count("framelist") != 1) ||
+                (cxxopts_result.count("input") != 1) ) {
+            std::cout << options.help() << std::endl;
+            return -1;
+        }
 
-        // get filenames
+        crop_flag = cxxopts_result["crop"].as<bool>();
+        display_flag = cxxopts_result["display"].as<bool>();
         framelist_file_name = cxxopts_result["framelist"].as<std::string>(); 
         input_file_name = cxxopts_result["input"].as<std::string>(); 
+
     }
     catch(const cxxopts::exceptions::exception &e)
     {
@@ -303,8 +315,8 @@ int main(int argc, char ** argv){
             }
             if(((unsigned int)(pkt->stream_index) == video_stream_idx)){
 
-                std::cout << "DTS: " << pkt->dts << "; PTS: " << pkt->pts << std::endl;
-                
+                //std::cout << "DTS: " << pkt->dts << "; PTS: " << pkt->pts << std::endl;
+
                 if( (uint64_t)pkt->dts != val*pts_dts_scale){
                     std::cout << "ERROR: MISSED THE DESIRED FRAME!" << std::endl;
                 } else {
@@ -330,25 +342,35 @@ int main(int argc, char ** argv){
                             return -1;
                         }
 
+                        if( crop_flag ){
+                            std::cout << "TODO: IMPLEMENT CROPPING!" << std::endl;
+                        }
+
                         // write frame to file using only ffmpeg (lavf, lavc, etc...)
                         write_avframe_to_file(converted_frame, my_frame_counter);
 
 
                         // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
                         // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
+                        if(display_flag){
+                            // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
+                            cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
+                            cv::Mat cv_frame_bgr;
+                            cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
 
-                        // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
-                        cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
-                        cv::Mat cv_frame_bgr;
-                        cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
+                            // write  to file
+                            //char img_filename[255]; 
+                            //sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
+                            //cv::imwrite(img_filename,cv_frame_bgr);
+                            
 
-                        // write  to file
-                        char img_filename[255]; 
-                        sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
-                        cv::imwrite(img_filename,cv_frame_bgr);
-                        cv::imshow("my window",cv_frame_bgr);
-                        cv::waitKey();
-
+                            char framenum_str[255];
+                            sprintf(framenum_str,"%ld",val); 
+                            cv::putText(cv_frame_bgr,(std::string)framenum_str,cv::Point(10,60),cv::FONT_HERSHEY_SIMPLEX,2.0,CV_RGB(0,65535,0),6);
+                            cv::imshow("my window",cv_frame_bgr);
+                            cv::waitKey(800);
+                        }
+                        
                         // we received a valid frame, so increment counter
                         ++my_frame_counter;
                     }
