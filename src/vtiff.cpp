@@ -387,6 +387,11 @@ int main(int argc, char ** argv){
 
     std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
 
+
+    // free memory
+    avformat_close_input(&ifmt_ctx);
+    avformat_free_context(ifmt_ctx);
+
     // done
     return 0;
 }

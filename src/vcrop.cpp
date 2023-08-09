@@ -141,70 +141,79 @@ int main(int argc, char ** argv){
         }
     }
 
+
+
+    // CONFIGURE INPUT VIDEO HANDLERS
+    // open video file and read headers
+    if( avformat_open_input(&ifmt_ctx, infile_name.c_str(), NULL, NULL) != 0 ){
+        std::cout << "Could not open " << infile_name << std::endl;
+        return -1;
+    }
+
+    // get stream info from file
+    if( avformat_find_stream_info( ifmt_ctx, NULL ) < 0){
+        std::cout << "avformat_find_stream_info() failed!" << std::endl;
+        return -1;
+    }
+
+    // print video format info to screen
+    std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
+    av_dump_format(ifmt_ctx, 0, infile_name.c_str(), false);
+    std::cout << std::endl;
+
+    // look for a single v210-encoded video stream in this container
+    for(unsigned int stream_idx = 0; stream_idx < ifmt_ctx->nb_streams; ++stream_idx){
+        istream = ifmt_ctx->streams[stream_idx];
+        codec_params =istream->codecpar;
+        printf("Located stream %02d: codec type = %03d, codec id = %03d\n",
+                stream_idx,
+                codec_params->codec_type,
+                codec_params->codec_id);
+
+        // determine whether this is v210 encoded video
+        if( codec_params->codec_type == AVMEDIA_TYPE_VIDEO && codec_params->codec_id == AV_CODEC_ID_V210){
+            //std::cout << "FOUND v210 ENCODED VIDEO" << std::endl;
+            if(found_video_stream){
+                std::cout << "ERROR: MORE THAN ONE v210 VIDEO STREAM FOUND!" << std::endl;
+                return -1;
+            } else {
+                video_stream_idx = stream_idx;
+                found_video_stream = true;
+            }
+        }
+    }
+
+    // error out if we didn't find v210 video
+    if(!found_video_stream){
+        std::cout << "ERROR: DID NOT FIND A VIDEO STREAM" << std::endl;
+        return -1;
+    }
+
+    // report success
+    istream = ifmt_ctx->streams[video_stream_idx];
+    codec_params = istream->codecpar;
+    printf("Working with stream %02d: codec type = %03d, codec id = %03d\n",
+            video_stream_idx,
+            codec_params->codec_type,
+            codec_params->codec_id);
+    std::cout << "stream timebase: " << (istream->time_base).num << "/" << (istream->time_base).den << std::endl;
+
+    // ITERATE THROUGH ALL CLIP DEFINITIONS
+    // EXTRACTING THE DESIRED SEGMENT OF VIDEO TO FILE
+    //std::cout << "Analyzing " << infile_name << "..." << std::endl;
     for( auto & item : clips){
+
+        // reset frame counters
+        my_frame_counter = 0;
+        prev_pct = -1;
+
+        // get clip definition parameters
+        // NOTE: 'infile' is common and has already been set
         outfile_name = item.name;
         firstframe = item.first_frame;
         lastframe = item.last_frame;
         num_frames_to_extract = (lastframe-firstframe+1);
         std::cout << "Processing: " << outfile_name << " [" << firstframe << "," << lastframe << "]" << std::endl;
-
-
-        std::cout << "Analyzing " << infile_name << "..." << std::endl;
-
-        // open video file and read headers
-        if( avformat_open_input(&ifmt_ctx, infile_name.c_str(), NULL, NULL) != 0 ){
-            std::cout << "Could not open " << infile_name << std::endl;
-            return -1;
-        }
-
-        // get stream info from file
-        if( avformat_find_stream_info( ifmt_ctx, NULL ) < 0){
-            std::cout << "avformat_find_stream_info() failed!" << std::endl;
-            return -1;
-        }
-
-        // print video format info to screen
-        //std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
-        //av_dump_format(ifmt_ctx, 0, infile_name.c_str(), false);
-        //std::cout << std::endl;
-
-        // look for a single v210-encoded video stream in this container
-        for(unsigned int stream_idx = 0; stream_idx < ifmt_ctx->nb_streams; ++stream_idx){
-            istream = ifmt_ctx->streams[stream_idx];
-            codec_params =istream->codecpar;
-            printf("Located stream %02d: codec type = %03d, codec id = %03d\n",
-                    stream_idx,
-                    codec_params->codec_type,
-                    codec_params->codec_id);
-
-            // determine whether this is v210 encoded video
-            if( codec_params->codec_type == AVMEDIA_TYPE_VIDEO && codec_params->codec_id == AV_CODEC_ID_V210){
-                //std::cout << "FOUND v210 ENCODED VIDEO" << std::endl;
-                if(found_video_stream){
-                    std::cout << "ERROR: MORE THAN ONE v210 VIDEO STREAM FOUND!" << std::endl;
-                    return -1;
-                } else {
-                    video_stream_idx = stream_idx;
-                    found_video_stream = true;
-                }
-            }
-        }
-
-        // error out if we didn't find v210 video
-        if(!found_video_stream){
-            std::cout << "ERROR: DID NOT FIND A VIDEO STREAM" << std::endl;
-            return -1;
-        }
-
-        // report success
-        istream = ifmt_ctx->streams[video_stream_idx];
-        codec_params = istream->codecpar;
-        printf("Working with stream %02d: codec type = %03d, codec id = %03d\n",
-                video_stream_idx,
-                codec_params->codec_type,
-                codec_params->codec_id);
-        std::cout << "stream timebase: " << (istream->time_base).num << "/" << (istream->time_base).den << std::endl;
-
 
         // allocate packet pointer
         pkt = av_packet_alloc();
@@ -309,19 +318,26 @@ int main(int argc, char ** argv){
 
         }
         std::cout << std::endl;
-        std::cout << "Processed " << my_frame_counter << " frames" << std::endl;
 
+        // write trailer to finish file
         std::cout << "Writing trailer" << std::endl;
         if( av_write_trailer(ofmt_ctx) ){
             std::cout << "ERROR WRITING OUTPUT FILE TRAILER" << std::endl;
             return -1;
         }
-        
-        // TODO: FREE A BUNCH OF STUFF HERE!
 
-       // return -1;
+        // free output-related memory
+        avio_close(ofmt_ctx->pb);
+        avformat_free_context(ofmt_ctx);
+
+        // done processing this clip, move on to next one
+        // return -1;
     }
-    
+
+    // free input-related memory
+    avformat_close_input(&ifmt_ctx);
+    avformat_free_context(ifmt_ctx);
+
     // done
     return 0;
 }
