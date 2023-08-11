@@ -18,7 +18,7 @@ extern "C" {
 #include <iostream>
 #include <string>
 #include <cxxopts.hpp>  // https://www.github.com/jarro2783/cxxopts
-#include <yaml.h>
+#include <yaml-cpp/yaml.h>
 
 int main(int argc, char ** argv){
 

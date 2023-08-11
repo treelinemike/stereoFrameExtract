@@ -1,5 +1,5 @@
 INCLUDE_SYS = /usr/local/include
-INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include /usr/local/include/yaml-cpp
+INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include /usr/local/include
 LIB = /usr/local/lib /usr/local/lib/cmake/yaml-cpp
 
 CC = g++
