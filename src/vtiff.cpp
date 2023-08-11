@@ -2,6 +2,11 @@
 
 // followed several ffmpeg examples to create this
 
+// allow windows builds which would otherwise
+// compain about using fopen() instead of fopen_s()
+// and sprintf() instead of sprintf_s(), etc...
+#define _CRT_SECURE_NO_DEPRECATE
+
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -15,6 +20,7 @@ extern "C" {
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <cxxopts.hpp>
+
 
 //#define VIDEO_FILE "test_twoframe.mov"
 //#define VIDEO_FILE "20230521_0deg_cal_L01.mov"
