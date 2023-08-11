@@ -3,7 +3,7 @@ INCLUDE = ~/include ./include /usr/include/opencv4 ../cxxopts/include /usr/local
 LIB = /usr/local/lib /usr/local/lib/cmake/yaml-cpp
 
 CC = g++
-CFLAGS = -no-pie -pthread -Wall
+CFLAGS = -no-pie -pthread -Wall -Ofast
 LD_FLAGS_CROP = -lavutil -lavformat -lavcodec -lyaml-cpp
 LD_FLAGS_TIFF = -lavutil -lavformat -lavcodec -lswscale -lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_imgcodecs
 
