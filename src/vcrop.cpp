@@ -440,7 +440,6 @@ int main(int argc, char** argv) {
 							
 							// encode the decoded frame with the output codec
 							AVPacket* outpkt = av_packet_alloc();;
-							enc_ctx->time_base = istream->time_base;
 							int enc_resp = avcodec_send_frame(enc_ctx, frame);
 
 							while (enc_resp >= 0) {
@@ -461,13 +460,6 @@ int main(int argc, char** argv) {
 								outpkt->duration = pts_dts_scale;
 								av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
 
-								//std::cout << "outpacket PTS = " << outpkt->pts << ", DTS = " << outpkt->dts << std::endl;
-								//std::cout << "** inpkt timebase:  " << inpkt->time_base.num << "/" << inpkt->time_base.den << std::endl;
-								//std::cout << "** ostream timebase: " << ostream->time_base.num << "/" << ostream->time_base.den << std::endl;
-								//std::cout << "** outpkt timebase:  " << outpkt->time_base.num << "/" << outpkt->time_base.den << std::endl;
-								//std::cout << "** Enc_Ctx timebase:  " << enc_ctx->time_base.num << "/" << enc_ctx->time_base.den << std::endl;
-								//std::cout << "** istream timebase:  " << istream->time_base.num << "/" << istream->time_base.den << std::endl;
-								
 								// mux packet into container
 								if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
 									std::cout << "ERROR WRITING COMPRESSED PACKET: " << enc_resp << std::endl;
@@ -502,22 +494,66 @@ int main(int argc, char** argv) {
 			av_packet_unref(inpkt);
 		}
 
-		std::cout << std::endl;
+		// flush encoder
+		// TODO: consolidate this with above to avoid repeat code?
+		// TODO: consolidate this with above to avoid repeat code?
+		// this might not be a big deal for formats without B-frames
+		// since we should get a packet back from the encoder for all I-frames
+		// and v210 and ffv1 should have only I-frames
+		// see: https://ffmpeg.org/doxygen/trunk/transcoding_8c-example.html
+		if( compress_flag ){
+			
+			// send flush command to encoder
+			if (avcodec_send_frame(enc_ctx, NULL) < 0) {
+				std::cout << "ERROR SENDING FLUSH PACKET TO ENCODER" << std::endl;
+				return -1;
+			}
 
-		// TODO: flush encoder
-		// https://ffmpeg.org/doxygen/trunk/transcoding_8c-example.html
-		// if( compress_flag ){
-		// avcodec_send_frame(enc_ctx, NULL);
-		// int ret = 0;
-		// while(ret >= 0){
-		//	ret = avcodec_receive_packet(...)
-		//	pkt->stream_index = ...;
-		//  av_packet_rescale_ts();
-		// ret = av_interleaved_write_frame();
-		// }
-		// }
+			// read any remaining packets from encoder
+			AVPacket* outpkt = av_packet_alloc();;
+			int enc_resp = 0;
+			while(enc_resp >= 0){
+				enc_resp = avcodec_receive_packet(enc_ctx, outpkt);
+				if (enc_resp == AVERROR(EAGAIN) || enc_resp == AVERROR_EOF) {
+					//std::cout << "NO PACKET AVAILBLE FROM ENCODER" << std::endl;
+					break;
+				}
+				else if (enc_resp < 0) {
+					std::cout << "ERROR RECEIVING PACKET FROM ENCODER" << std::endl;
+					return -1;
+				}
+
+				// correct output stream parameters
+				outpkt->stream_index = ostream->index;
+				outpkt->pts = my_frame_counter * pts_dts_scale;
+				outpkt->dts = my_frame_counter * pts_dts_scale;
+				outpkt->duration = pts_dts_scale;
+				av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
+
+				// mux packet into container
+				if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
+					std::cout << "ERROR WRITING COMPRESSED PACKET: " << enc_resp << std::endl;
+					return -1;
+				}
+
+				// increment frame counter
+				++my_frame_counter;
+			}
+
+			if ((int)((my_frame_counter * 100) / num_frames_to_extract) > prev_pct) {
+				prev_pct = (int)((my_frame_counter * 100) / num_frames_to_extract);
+				printf("\r%4d%% (%8ld/%8ld)", prev_pct, my_frame_counter, num_frames_to_extract);
+				fflush(stdout);
+			}
+
+			// done with this packet, so unreference and free it
+			av_packet_unref(outpkt);
+			av_packet_free(&outpkt);
+		}
+
 
 		// write trailer to finish file
+		std::cout << std::endl;
 		std::cout << "Writing trailer" << std::endl;
 		if (av_write_trailer(ofmt_ctx)) {
 			std::cout << "ERROR WRITING OUTPUT FILE TRAILER" << std::endl;
