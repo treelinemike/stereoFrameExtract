@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
 
 	// error out if we didn't find v210 video
 	if (!found_video_stream) {
-		std::cout << "ERROR: DID NOT FIND A VIDEO STREAM" << std::endl;
+		std::cout << "ERROR: DID NOT FIND A V210 VIDEO STREAM" << std::endl;
 		return -1;
 	}
 
@@ -217,15 +217,8 @@ int main(int argc, char** argv) {
 		codec_params->codec_id);
 	std::cout << "stream timebase: " << (istream->time_base).num << "/" << (istream->time_base).den << std::endl;
 
-	// guess input framerate
-	iframerate = av_guess_frame_rate(ifmt_ctx, istream, NULL);
-
 	// set scaling
 	pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
-
-
-
-
 
 	// DECODER (only needed if transcoding / compressing video - otherwise just transmux packets) 
 	// open the decoder
@@ -244,6 +237,9 @@ int main(int argc, char** argv) {
 		return -1;
 	}
 
+	// estimate decoder framerate
+	dec_ctx->framerate = av_guess_frame_rate(ifmt_ctx, istream, NULL);
+
 	// copy codec parameters from stream to decoder
 	if (avcodec_parameters_to_context(dec_ctx, istream->codecpar) < 0) {
 		std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO DECODER" << std::endl;
@@ -251,6 +247,7 @@ int main(int argc, char** argv) {
 	}
 
 	// initialize decoder
+	//dec_ctx->time_base = istream->time_base;
 	if (avcodec_open2(dec_ctx, dec, NULL) < 0) {
 		std::cout << "ERROR: COULD NOT INITIALIZE DECODER" << std::endl;
 		return -1;
@@ -282,8 +279,6 @@ int main(int argc, char** argv) {
 		std::cout << "Processing: " << outfile_name << " [" << firstframe << "," << lastframe << "]" << std::endl;
 
 
-
-
 		// OUTPUT FORMAT
 		// NEED THIS HERE BECAUSE WE INITIAIZE OUTPUT FORMAT CONTEXT FOR EACH NEW FILE
 		// allocate output format context
@@ -292,17 +287,25 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
+		// check to be sure we're muxing into an MOV container
+		// TODO: might make this robust to other containers
+		// although our intent 
+		if (strcmp(ofmt_ctx->oformat->name, "mov")) {
+			std::cout << "ERROR: CANNOT RELIABLY MUX INTO " << ofmt_ctx->oformat->name << std::endl;
+			return -1;
+		}
+		else {
+			std::cout << "Muxing into: " << ofmt_ctx->oformat->name << std::endl;
+		}
+
 		// single output stream for video
 		if ((ostream = avformat_new_stream(ofmt_ctx, NULL)) == NULL) {
 			std::cout << "ERROR: COULD NOT ALLOCATE OUTPUT STREAM" << std::endl;
 			return -1;
 		}
 
-
 		// ENCODER (only needed if transcoding / compressing video - otherwise just transmux packets)
-
-		enc = avcodec_find_encoder(AV_CODEC_ID_FFV1);
-		if (!enc) {
+		if ((enc = avcodec_find_encoder(AV_CODEC_ID_FFV1)) == 0) {
 			std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
 			return -1;
 		}
@@ -313,26 +316,25 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
-		// set output stream and encoder parameters
-		// these hold for both transmuxing and transcoding
-		enc_ctx->framerate = iframerate;
-		enc_ctx->time_base = istream->time_base;
-		enc_ctx->codec_type = enc->type;
-		enc_ctx->codec_id = enc->id;
-		enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-		enc_ctx->width = dec_ctx->width;
+		// initialize encoder
+		// bits per raw sample doesn't need to be set, presumably inferred from pix_fmt
 		enc_ctx->height = dec_ctx->height;
-		enc_ctx->bits_per_raw_sample = istream->codecpar->bits_per_raw_sample;
-		enc_ctx->bits_per_coded_sample = istream->codecpar->bits_per_raw_sample;
-		ostream->sample_aspect_ratio.num = 1;
-		ostream->sample_aspect_ratio.den = 1;
-		ostream->time_base = istream->time_base;
-		ostream->avg_frame_rate = istream->avg_frame_rate;
-		ostream->r_frame_rate = istream->r_frame_rate;
+		enc_ctx->width = dec_ctx->width;
+		enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
+		enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+		enc_ctx->time_base = dec_ctx->time_base;
+		
+		// gloabl header flag (following FFmpeg example)
+		if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+		if (avcodec_open2(enc_ctx, enc, NULL) < 0) {
+			std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+			return -1;
+		}
 
 		// update output stream and encoder codec parameters
 		if (!compress_flag) {
-
 			// TRANSMUXING ONLY: get codec parameters from input stream
 			if (avcodec_parameters_copy(ostream->codecpar, istream->codecpar) < 0) {
 				std::cout << "ERROR: COULD NOT COPY CODEC PARAMETERS FROM INPUT STREAM TO OUTPUT STREAM" << std::endl;
@@ -346,43 +348,12 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		enc_ctx->time_base = istream->time_base;
-		enc_ctx->codec_type = enc->type;
-		enc_ctx->codec_id = enc->id;
-		enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-		enc_ctx->width = dec_ctx->width;
-		enc_ctx->height = dec_ctx->height;
-		enc_ctx->bits_per_raw_sample = istream->codecpar->bits_per_raw_sample;
-		enc_ctx->bits_per_coded_sample = istream->codecpar->bits_per_raw_sample;
+		// update output stream parameters
 		ostream->sample_aspect_ratio.num = 1;
 		ostream->sample_aspect_ratio.den = 1;
-		ostream->time_base = istream->time_base;
+		ostream->time_base = istream->time_base;   // THIS IS KEY!
 		ostream->avg_frame_rate = istream->avg_frame_rate;
-		ostream->r_frame_rate = istream->r_frame_rate;
-		pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
-
-		std::cout << "Enc ctx width: " << enc_ctx->width << ", height: " << enc_ctx->height << std::endl;
-		//return -1;
-		std::cout << "Output stream timebase: " << (ostream->time_base).num << "/" << (ostream->time_base).den << std::endl;
-		//std::cout << "Output stream index: " << ostream->index << std::endl;
-		//std::cout << "SCALE FACTOR: " << pts_dts_scale << std::endl;
-		//std::cout << "OUT STREAM ID " << ostream->id << std::endl;
-		//std::cout << "CODEC SAR: " << istream->codecpar->sample_aspect_ratio.num << ":" << istream->codecpar->sample_aspect_ratio.den << std::endl;
-		//std::cout << "STREAM SAR: " << ostream->sample_aspect_ratio.num << ":" << ostream->sample_aspect_ratio.den << std::endl;
-
-		// initialize encoder
-		if (avcodec_open2(enc_ctx, enc, NULL) < 0) {
-			std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-			return -1;
-		}
-
-		// allocate packet pointer
-		inpkt = av_packet_alloc();
-		if (!inpkt) {
-			std::cout << "ERROR: COULD NOT ALLOCATE DECODER PACKET POINTER" << std::endl;
-			return -1;
-		}
-
+	
 		// open the output file
 		if (!(ofmt_ctx->oformat->flags & AVFMT_NOFILE)) {
 			std::cout << "Opening output file" << std::endl;
@@ -398,6 +369,28 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
+		// check for a change of timebase
+		// TODO: make this robust to different timebases?
+		// not sure we want this, because we want the precision of 1/60000 for 59.94fps
+		if (av_cmp_q(ostream->time_base, istream->time_base)) {
+			std::wcout << "ERROR: avformat_write_header() CHANGED THE OUTPUT STREAM TIMEBASE TO " << ostream->time_base.num << "/" << ostream->time_base.den << std::endl;
+			return -1;
+		}
+
+		// display output format
+		std::cout << std::endl;
+		std::cout << "Output format:" << std::endl;
+		av_dump_format(ofmt_ctx, 0, NULL, 1);
+		std::cout << std::endl;
+
+		// allocate packet pointer
+		inpkt = av_packet_alloc();
+		if (!inpkt) {
+			std::cout << "ERROR: COULD NOT ALLOCATE DECODER PACKET POINTER" << std::endl;
+			return -1;
+		}
+
+		// find start of clip
 		std::cout << "Seeking to first frame in clip" << std::endl;
 		if (av_seek_frame(ifmt_ctx, video_stream_idx, firstframe * pts_dts_scale, 0) < 0) {
 			std::cout << "ERROR: SEEK FAILED" << std::endl;
@@ -414,16 +407,15 @@ int main(int argc, char** argv) {
 					continue;
 				}
 
+				// correct PTS and DTS for output stream
+				inpkt->pts = my_frame_counter * pts_dts_scale;
+				inpkt->dts = my_frame_counter * pts_dts_scale;
+				inpkt->time_base = istream->time_base;
+
 				//std::cout << "Adding packet of size: " << inpkt->size << std::endl;
 				//printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",inpkt->pts,inpkt->dts,inpkt->pos, (inpkt->flags & AV_PKT_FLAG_KEY) ); 
 
-				if (!compress_flag) {
-
-					// TRANSMUXING ONLY
-
-					// correct PTS and DTS for output stream
-					inpkt->pts = my_frame_counter * pts_dts_scale;
-					inpkt->dts = my_frame_counter * pts_dts_scale;
+				if (!compress_flag) { // TRANSMUXING ONLY
 
 					// mux packet into output format
 					inpkt->stream_index = ostream->index;
@@ -433,59 +425,64 @@ int main(int argc, char** argv) {
 					}
 					++my_frame_counter;
 				}
-				else {
-
-					// TRANSCODING
+				else { // TRANSCODING
 
 					// send packet to decoder
 					if (avcodec_send_packet(dec_ctx, inpkt) < 0) {
 						std::cout << "ERROR SENDING PACKET TO DECODER" << std::endl;
 						return -1;
 					}
-					else {
-						std::cout << "SENT PACKET TO DECODER" << std::endl;
-					}
 
 					// get all available frames from the decoder
 					int retval = 0;
 					while (retval >= 0) {
 						if ((retval = avcodec_receive_frame(dec_ctx, frame)) == 0) {
-							std::cout << "RECEIVED A DECODED FRAME" << std::endl;
-
+							
 							// encode the decoded frame with the output codec
 							AVPacket* outpkt = av_packet_alloc();;
+							enc_ctx->time_base = istream->time_base;
 							int enc_resp = avcodec_send_frame(enc_ctx, frame);
 
 							while (enc_resp >= 0) {
 								enc_resp = avcodec_receive_packet(enc_ctx, outpkt);
 								if (enc_resp == AVERROR(EAGAIN) || enc_resp == AVERROR_EOF) {
-									std::cout << "NO PACKET AVAILBLE FROM ENCODER" << std::endl;
+									//std::cout << "NO PACKET AVAILBLE FROM ENCODER" << std::endl;
 									break;
 								}
 								else if (enc_resp < 0) {
 									std::cout << "ERROR RECEIVING PACKET FROM ENCODER" << std::endl;
 									return -1;
 								}
-								std::cout << "RECEIVED PACKET FROM ENCODER" << std::endl;
 								
 								// correct output stream parameters
+								outpkt->stream_index = ostream->index;
 								outpkt->pts = my_frame_counter * pts_dts_scale;
 								outpkt->dts = my_frame_counter * pts_dts_scale;
-								outpkt->stream_index = ostream->index;
-								outpkt->time_base = inpkt->time_base;
-								outpkt->duration = inpkt->duration;
+								outpkt->duration = pts_dts_scale;
+								av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
+
+								//std::cout << "outpacket PTS = " << outpkt->pts << ", DTS = " << outpkt->dts << std::endl;
+								//std::cout << "** inpkt timebase:  " << inpkt->time_base.num << "/" << inpkt->time_base.den << std::endl;
+								//std::cout << "** ostream timebase: " << ostream->time_base.num << "/" << ostream->time_base.den << std::endl;
+								//std::cout << "** outpkt timebase:  " << outpkt->time_base.num << "/" << outpkt->time_base.den << std::endl;
+								//std::cout << "** Enc_Ctx timebase:  " << enc_ctx->time_base.num << "/" << enc_ctx->time_base.den << std::endl;
+								//std::cout << "** istream timebase:  " << istream->time_base.num << "/" << istream->time_base.den << std::endl;
+								
+								// mux packet into container
 								if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
 									std::cout << "ERROR WRITING COMPRESSED PACKET: " << enc_resp << std::endl;
 									return -1;
 								}
-								std::cout << "WROTE COMPRESSED PACKET" << std::endl;
+
+								// increment frame counter
+								++my_frame_counter;
 							}
 
 							// done with this packet, so unreference and free it
 							av_packet_unref(outpkt);
 							av_packet_free(&outpkt);
 
-							++my_frame_counter;
+
 						}
 	
 						// unreference the frame
@@ -506,6 +503,19 @@ int main(int argc, char** argv) {
 		}
 
 		std::cout << std::endl;
+
+		// TODO: flush encoder
+		// https://ffmpeg.org/doxygen/trunk/transcoding_8c-example.html
+		// if( compress_flag ){
+		// avcodec_send_frame(enc_ctx, NULL);
+		// int ret = 0;
+		// while(ret >= 0){
+		//	ret = avcodec_receive_packet(...)
+		//	pkt->stream_index = ...;
+		//  av_packet_rescale_ts();
+		// ret = av_interleaved_write_frame();
+		// }
+		// }
 
 		// write trailer to finish file
 		std::cout << "Writing trailer" << std::endl;
