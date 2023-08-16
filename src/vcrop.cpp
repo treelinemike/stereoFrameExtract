@@ -23,17 +23,19 @@ extern "C" {
 int main(int argc, char** argv) {
 
 	// INPUT-RELATED VARIABLES
-	static AVFormatContext* ifmt_ctx; // input format context
-	AVStream* istream;
-	AVCodecParameters* codec_params;
+	static AVFormatContext* ifmt_ctx = NULL; // input format context
+	AVStream* istream = NULL;
+	AVCodecParameters* codec_params = NULL;
 	AVPacket* inpkt = NULL;
-	AVRational iframerate;
 
 	// OUTPUT-RELATED VARIABLES
-	static AVFormatContext* ofmt_ctx; // output format context
-	AVStream* ostream;
+	static AVFormatContext* ofmt_ctx = NULL; // output format context
+	AVStream* ostream = NULL;
 	const AVCodec* enc = NULL;
-	AVCodecContext* enc_ctx;
+	AVCodecContext* enc_ctx = NULL;
+
+	// TRANSCODING-RELATED VARIABLES
+	AVCodecContext* dec_ctx = NULL;
 
 
 	// general variables
@@ -175,7 +177,8 @@ int main(int argc, char** argv) {
 	}
 
 	// print video format info to screen
-	std::cout << "Number of streams found: " << ifmt_ctx->nb_streams << std::endl << std::endl;
+	std::cout << std::endl;
+	std::cout << "Input format: " << std::endl;
 	av_dump_format(ifmt_ctx, 0, infile_name.c_str(), false);
 	std::cout << std::endl;
 
@@ -220,47 +223,47 @@ int main(int argc, char** argv) {
 	// set scaling
 	pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
 
-	// DECODER (only needed if transcoding / compressing video - otherwise just transmux packets) 
-	// open the decoder
-	const AVCodec* dec = NULL;
-	dec = avcodec_find_decoder(istream->codecpar->codec_id);
-	if (!dec) {
-		std::cout << "ERROR: COULD NOT FIND DECODER" << std::endl;
-		return -1;
-	}
-
-	// allocate decoder context
-	AVCodecContext* dec_ctx = NULL;
-	dec_ctx = avcodec_alloc_context3(dec);
-	if (!dec_ctx) {
-		std::cout << "ERROR: COULD NOT OPEN DECODER CONTEXT" << std::endl;
-		return -1;
-	}
-
-	// estimate decoder framerate
-	dec_ctx->framerate = av_guess_frame_rate(ifmt_ctx, istream, NULL);
-
-	// copy codec parameters from stream to decoder
-	if (avcodec_parameters_to_context(dec_ctx, istream->codecpar) < 0) {
-		std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO DECODER" << std::endl;
-		return -1;
-	}
-
-	// initialize decoder
-	//dec_ctx->time_base = istream->time_base;
-	if (avcodec_open2(dec_ctx, dec, NULL) < 0) {
-		std::cout << "ERROR: COULD NOT INITIALIZE DECODER" << std::endl;
-		return -1;
-	}
-
 	// allocate frame, this can happen anywhere
 	// we will keep reusing the frame memory
-	if((frame = av_frame_alloc()) == 0){
+	if ((frame = av_frame_alloc()) == 0) {
 		std::cout << "ERROR: COULD NOT ALLOCATE FRAME POINTER" << std::endl;
 		return -1;
 	}
 
-	
+
+	// SET UP DECODER (only needed if transcoding / compressing video - otherwise just transmux packets) 
+	if (compress_flag) {
+		// open the decoder
+		const AVCodec* dec = NULL;
+		dec = avcodec_find_decoder(istream->codecpar->codec_id);
+		if (!dec) {
+			std::cout << "ERROR: COULD NOT FIND DECODER" << std::endl;
+			return -1;
+		}
+
+		// allocate decoder context
+		dec_ctx = avcodec_alloc_context3(dec);
+		if (!dec_ctx) {
+			std::cout << "ERROR: COULD NOT OPEN DECODER CONTEXT" << std::endl;
+			return -1;
+		}
+
+		// estimate decoder framerate
+		dec_ctx->framerate = av_guess_frame_rate(ifmt_ctx, istream, NULL);
+
+		// copy codec parameters from stream to decoder
+		if (avcodec_parameters_to_context(dec_ctx, istream->codecpar) < 0) {
+			std::cout << "ERROR: COULD NOT COPY CODEC PARAMS FROM STREAM TO DECODER" << std::endl;
+			return -1;
+		}
+
+		// initialize decoder
+		if (avcodec_open2(dec_ctx, dec, NULL) < 0) {
+			std::cout << "ERROR: COULD NOT INITIALIZE DECODER" << std::endl;
+			return -1;
+		}
+	}
+		
 	// ITERATE THROUGH ALL CLIP DEFINITIONS
 	// EXTRACTING THE DESIRED SEGMENT OF VIDEO TO FILE
 	//std::cout << "Analyzing " << infile_name << "..." << std::endl;
@@ -279,7 +282,7 @@ int main(int argc, char** argv) {
 		std::cout << "Processing: " << outfile_name << " [" << firstframe << "," << lastframe << "]" << std::endl;
 
 
-		// OUTPUT FORMAT
+		// SET UP OUTPUT FORMAT
 		// NEED THIS HERE BECAUSE WE INITIAIZE OUTPUT FORMAT CONTEXT FOR EACH NEW FILE
 		// allocate output format context
 		if (avformat_alloc_output_context2(&ofmt_ctx, NULL, NULL, outfile_name.c_str()) < 0) {
@@ -304,33 +307,35 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
-		// ENCODER (only needed if transcoding / compressing video - otherwise just transmux packets)
-		if ((enc = avcodec_find_encoder(AV_CODEC_ID_FFV1)) == 0) {
-			std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
-			return -1;
-		}
+		// SET UP ENCODER (only needed if transcoding / compressing video - otherwise just transmux packets)
+		if (compress_flag) {
+			if ((enc = avcodec_find_encoder(AV_CODEC_ID_FFV1)) == 0) {
+				std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
+				return -1;
+			}
 
-		// allocate encoder context
-		if ((enc_ctx = avcodec_alloc_context3(enc)) == 0) {
-			std::cout << "ERROR: COULD NOT OPEN ENCODER CONTEXT" << std::endl;
-			return -1;
-		}
+			// allocate encoder context
+			if ((enc_ctx = avcodec_alloc_context3(enc)) == 0) {
+				std::cout << "ERROR: COULD NOT OPEN ENCODER CONTEXT" << std::endl;
+				return -1;
+			}
 
-		// initialize encoder
-		// bits per raw sample doesn't need to be set, presumably inferred from pix_fmt
-		enc_ctx->height = dec_ctx->height;
-		enc_ctx->width = dec_ctx->width;
-		enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
-		enc_ctx->pix_fmt = dec_ctx->pix_fmt;
-		enc_ctx->time_base = dec_ctx->time_base;
-		
-		// gloabl header flag (following FFmpeg example)
-		if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
-			enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+			// initialize encoder
+			// bits per raw sample doesn't need to be set, presumably inferred from pix_fmt
+			enc_ctx->height = dec_ctx->height;
+			enc_ctx->width = dec_ctx->width;
+			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
+			enc_ctx->pix_fmt = dec_ctx->pix_fmt;
+			enc_ctx->time_base = dec_ctx->time_base;
 
-		if (avcodec_open2(enc_ctx, enc, NULL) < 0) {
-			std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-			return -1;
+			// gloabl header flag (following FFmpeg example)
+			if (ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+				enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+			if (avcodec_open2(enc_ctx, enc, NULL) < 0) {
+				std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
+				return -1;
+			}
 		}
 
 		// update output stream and encoder codec parameters
@@ -380,7 +385,7 @@ int main(int argc, char** argv) {
 		// display output format
 		std::cout << std::endl;
 		std::cout << "Output format:" << std::endl;
-		av_dump_format(ofmt_ctx, 0, NULL, 1);
+		av_dump_format(ofmt_ctx, 0, outfile_name.c_str(), 1);
 		std::cout << std::endl;
 
 		// allocate packet pointer
@@ -550,11 +555,11 @@ int main(int argc, char** argv) {
 			// done with this packet, so unreference and free it
 			av_packet_unref(outpkt);
 			av_packet_free(&outpkt);
-		}
 
-		// flush buffers
-		avcodec_flush_buffers(enc_ctx);
-		avcodec_flush_buffers(dec_ctx);
+			// flush buffers
+			avcodec_flush_buffers(enc_ctx);
+			avcodec_flush_buffers(dec_ctx);
+		}
 
 		// write trailer to finish file
 		std::cout << std::endl;
