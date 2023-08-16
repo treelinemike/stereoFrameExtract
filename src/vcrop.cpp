@@ -457,7 +457,7 @@ int main(int argc, char** argv) {
 								outpkt->stream_index = ostream->index;
 								outpkt->pts = my_frame_counter * pts_dts_scale;
 								outpkt->dts = my_frame_counter * pts_dts_scale;
-								outpkt->duration = pts_dts_scale;
+								//outpkt->duration = pts_dts_scale;
 								av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
 
 								// mux packet into container
@@ -501,6 +501,7 @@ int main(int argc, char** argv) {
 		// since we should get a packet back from the encoder for all I-frames
 		// and v210 and ffv1 should have only I-frames
 		// see: https://ffmpeg.org/doxygen/trunk/transcoding_8c-example.html
+		std::cout << std::endl;
 		if( compress_flag ){
 			
 			// send flush command to encoder
@@ -527,7 +528,7 @@ int main(int argc, char** argv) {
 				outpkt->stream_index = ostream->index;
 				outpkt->pts = my_frame_counter * pts_dts_scale;
 				outpkt->dts = my_frame_counter * pts_dts_scale;
-				outpkt->duration = pts_dts_scale;
+				//outpkt->duration = pts_dts_scale;
 				av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
 
 				// mux packet into container
@@ -551,6 +552,9 @@ int main(int argc, char** argv) {
 			av_packet_free(&outpkt);
 		}
 
+		// flush buffers
+		avcodec_flush_buffers(enc_ctx);
+		avcodec_flush_buffers(dec_ctx);
 
 		// write trailer to finish file
 		std::cout << std::endl;
