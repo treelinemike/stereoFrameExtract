@@ -1,5 +1,5 @@
 input_file: 20230521_0deg_cal_L01.mov
-compress: false
+compress: true
 clips:
   testclip_L01.mov:
     first: 21208

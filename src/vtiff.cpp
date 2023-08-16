@@ -181,10 +181,10 @@ int main(int argc, char ** argv){
                 codec_params->codec_id);
 
         // determine whether this is v210 encoded video
-        if( codec_params->codec_type == AVMEDIA_TYPE_VIDEO && codec_params->codec_id == AV_CODEC_ID_V210){
-            //std::cout << "FOUND v210 ENCODED VIDEO" << std::endl;
+        if( codec_params->codec_type == AVMEDIA_TYPE_VIDEO && (codec_params->codec_id == AV_CODEC_ID_V210 || codec_params->codec_id == AV_CODEC_ID_FFV1)){
+            //std::cout << "FOUND v210 OR FFV1 ENCODED VIDEO" << std::endl;
             if(found_video_stream){
-                std::cout << "ERROR: MORE THAN ONE v210 VIDEO STREAM FOUND!" << std::endl;
+                std::cout << "ERROR: MORE THAN ONE READABLE VIDEO STREAM FOUND!" << std::endl;
                 return -1;
             } else {
                 video_stream_idx = stream_idx;
@@ -193,9 +193,9 @@ int main(int argc, char ** argv){
         }
     }
 
-    // error out if we didn't find v210 video
+    // error out if we didn't find v210 or FFV1 video
     if(!found_video_stream){
-        std::cout << "ERROR: DID NOT FIND A VIDEO STREAM" << std::endl;
+        std::cout << "ERROR: DID NOT FIND A PROPERLY ENCODED VIDEO STREAM" << std::endl;
         return -1;
     }
 
