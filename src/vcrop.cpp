@@ -222,7 +222,8 @@ int main(int argc, char** argv) {
 
 	// set scaling
 	pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
-
+	//std::cout << "pts_dts_scale = " << pts_dts_scale << std::endl;
+	
 	// allocate frame, this can happen anywhere
 	// we will keep reusing the frame memory
 	if ((frame = av_frame_alloc()) == 0) {
@@ -444,7 +445,7 @@ int main(int argc, char** argv) {
 						if ((retval = avcodec_receive_frame(dec_ctx, frame)) == 0) {
 							
 							// encode the decoded frame with the output codec
-							AVPacket* outpkt = av_packet_alloc();;
+							AVPacket* outpkt = av_packet_alloc();	
 							int enc_resp = avcodec_send_frame(enc_ctx, frame);
 
 							while (enc_resp >= 0) {
@@ -460,10 +461,12 @@ int main(int argc, char** argv) {
 								
 								// correct output stream parameters
 								outpkt->stream_index = ostream->index;
-								outpkt->pts = my_frame_counter * pts_dts_scale;
-								outpkt->dts = my_frame_counter * pts_dts_scale;
-								//outpkt->duration = pts_dts_scale;
+								outpkt->pts = (my_frame_counter * pts_dts_scale);
+								outpkt->dts = (my_frame_counter * pts_dts_scale);
+								outpkt->duration = pts_dts_scale;
 								av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
+								
+								//std::cout << "Wrote pts = " << outpkt->pts << ", dts = " << outpkt->dts << ", my_frame_counter = " << my_frame_counter << " , scale " << pts_dts_scale << ", duration = " << outpkt->duration << std::endl;
 
 								// mux packet into container
 								if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
@@ -471,6 +474,7 @@ int main(int argc, char** argv) {
 									return -1;
 								}
 
+								
 								// increment frame counter
 								++my_frame_counter;
 							}

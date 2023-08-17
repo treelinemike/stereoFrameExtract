@@ -308,8 +308,8 @@ int main(int argc, char ** argv){
     // TODO: SEEK HERE TO EACH FRAME
     for(auto & val : framelist){
 
-        std::cout << "Seeking to frame " << val << std::endl;
-        if( av_seek_frame(ifmt_ctx,video_stream_idx,val*pts_dts_scale,0) < 0){
+        std::cout << "Attempting to decode frame " << val << std::endl;
+        if( av_seek_frame(ifmt_ctx,video_stream_idx,val*pts_dts_scale, AVSEEK_FLAG_BACKWARD) < 0){ // seeks to closest previous keyframe
             std::cout << "ERROR: SEEK FAILED" << std::endl;
             return -1;
         }
@@ -321,12 +321,16 @@ int main(int argc, char ** argv){
             }
             if(((unsigned int)(pkt->stream_index) == video_stream_idx)){
 
-                //std::cout << "DTS: " << pkt->dts << "; PTS: " << pkt->pts << std::endl;
+                std::cout << " Decoding frame " << (uint64_t)(pkt->dts/pts_dts_scale) << std::endl;
 
-                if( (uint64_t)pkt->dts != val*pts_dts_scale){
-                    std::cout << "ERROR: MISSED THE DESIRED FRAME!" << std::endl;
-                } else {
+                // determine whether we're at our desired frame or if we've passed it
+                // if we're before it we need to decode everything from the previous keyframe
+                if ((uint64_t)pkt->dts == val * pts_dts_scale) {    // we happened to seek right to where we wanted to be
                     found_frame = true;
+                }
+                else if ((uint64_t)pkt->dts > (val * pts_dts_scale)) { // we missed our frame!
+                    std::cout << "ERROR: SEEK PASSED THE DESIRED FRAME!" << std::endl;
+                    return -1;
                 }
 
                 // send packet to the decoder
@@ -341,44 +345,50 @@ int main(int argc, char ** argv){
                     if((retval = avcodec_receive_frame(dec_ctx,frame)) == 0){
 
                         // we have a valid AVFrame (frame) from the file video stream
-                        // this AVFrame has YUV422 pixel format, so convert it to
-                        // RGB444 (16bit)
-                        if( sws_scale_frame(sws_ctx,converted_frame,frame) < 0){
-                            std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
-                            return -1;
+                        // only process the frame if it is the one we want
+                        if (found_frame) {
+
+                            // this AVFrame has YUV422 pixel format, so convert it to
+                            // RGB444 (16bit)
+                            if (sws_scale_frame(sws_ctx, converted_frame, frame) < 0) {
+                                std::cout << "ERROR: COULD NOT CONVERT FRAME" << std::endl;
+                                return -1;
+                            }
+
+                            if (crop_flag) {
+                                std::cout << "TODO: IMPLEMENT CROPPING!" << std::endl;
+                            }
+
+                            // write frame to file using only ffmpeg (lavf, lavc, etc...)
+                            write_avframe_to_file(converted_frame, my_frame_counter);
+
+
+                            // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
+                            // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
+                            if (display_flag) {
+                                // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
+                                cv::Mat cv_frame_rgb(expected_height, expected_width, CV_16UC3, (uint16_t*)converted_frame->data[0]);
+                                cv::Mat cv_frame_bgr;
+                                cv::cvtColor(cv_frame_rgb, cv_frame_bgr, cv::COLOR_RGB2BGR);
+
+                                // write  to file
+                                //char img_filename[255]; 
+                                //sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
+                                //cv::imwrite(img_filename,cv_frame_bgr);
+
+
+                                char framenum_str[255];
+                                sprintf(framenum_str, "%ld", val);
+                                cv::putText(cv_frame_bgr, (std::string)framenum_str, cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 2.0, CV_RGB(0, 65535, 0), 6);
+                                cv::imshow("my window", cv_frame_bgr);
+                                cv::waitKey(800);
+                            }
+
+                            std::cout << "Saved frame " << (uint64_t)(pkt->dts / pts_dts_scale) << std::endl;
+
+                            // we received a valid frame, so increment counter
+                            ++my_frame_counter;
                         }
-
-                        if( crop_flag ){
-                            std::cout << "TODO: IMPLEMENT CROPPING!" << std::endl;
-                        }
-
-                        // write frame to file using only ffmpeg (lavf, lavc, etc...)
-                        write_avframe_to_file(converted_frame, my_frame_counter);
-
-
-                        // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
-                        // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
-                        if(display_flag){
-                            // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
-                            cv::Mat cv_frame_rgb(expected_height,expected_width,CV_16UC3,(uint16_t *)converted_frame->data[0]);                    
-                            cv::Mat cv_frame_bgr;
-                            cv::cvtColor(cv_frame_rgb,cv_frame_bgr,cv::COLOR_RGB2BGR);
-
-                            // write  to file
-                            //char img_filename[255]; 
-                            //sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
-                            //cv::imwrite(img_filename,cv_frame_bgr);
-                            
-
-                            char framenum_str[255];
-                            sprintf(framenum_str,"%ld",val); 
-                            cv::putText(cv_frame_bgr,(std::string)framenum_str,cv::Point(10,60),cv::FONT_HERSHEY_SIMPLEX,2.0,CV_RGB(0,65535,0),6);
-                            cv::imshow("my window",cv_frame_bgr);
-                            cv::waitKey(800);
-                        }
-                        
-                        // we received a valid frame, so increment counter
-                        ++my_frame_counter;
                     }
 
                     // unreference the frame pointer
@@ -391,7 +401,7 @@ int main(int argc, char ** argv){
         }
     }
 
-    std::cout << "Processed " << my_frame_counter << " frames!" << std::endl;
+    std::cout << "Saved " << my_frame_counter << " frames!" << std::endl;
 
 
     // free memory
