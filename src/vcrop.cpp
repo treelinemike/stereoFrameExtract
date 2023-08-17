@@ -6,11 +6,23 @@
 
 // TODO: add better exception handling, now most exceptions just fail out opaquely
 
+// allow windows builds which would otherwise
+// compain about using fopen() instead of fopen_s()
+// and sprintf() instead of sprintf_s(), etc...
+#define _CRT_SECURE_NO_DEPRECATE
+
+#define DAVINCI_CROP_WIDTH 894
+#define DAVINCI_CROP_HEIGHT 714
+#define DAVINCI_CROP_X 193
+#define DAVINCI_CROP_Y 3
+
 // need extern to include FFmpeg C libraries
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavfilter/avfilter.h>
+#include <libavfilter/buffersrc.h>
+#include <libavfilter/buffersink.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 #include <libavutil/opt.h>
@@ -19,6 +31,38 @@ extern "C" {
 #include <string>
 #include <cxxopts.hpp>  // https://www.github.com/jarro2783/cxxopts
 #include <yaml-cpp/yaml.h>
+
+
+// prepare a filter graph for cropping frames out of black border (da Vinci Xi)
+// ref: https://stackoverflow.com/questions/38099422/how-to-crop-avframe-using-ffmpegs-functions
+int crop_frame(const AVFrame* inframe, AVFrame* outframe, AVFilterContext* bufsrc_ctx, AVFilterContext* bufsnk_ctx) {
+
+	// copy input frame to output frame
+	if (av_frame_ref(outframe, inframe) < 0) {
+		std::cout << "ERROR COPYING INPUT FRAME TO OUTPUT FRAME" << std::endl;
+		return -1;
+	}
+
+	if (av_buffersrc_add_frame(bufsrc_ctx, outframe) < 0) {
+		std::cout << "ERROR ADDING FRAME TO SOURCE BUFFER CONTEXT" << std::endl;
+		return -1;
+	}
+
+	if (av_buffersink_get_frame(bufsnk_ctx, outframe) < 0) {
+		std::cout << "ERROR ADDING FRAME TO SINK BUFFER CONTEXT" << std::endl;
+		return -1;
+	}
+
+	// return 0 on success
+	// cropped frame is in *outframe
+	return 0;
+}
+
+
+
+
+
+
 
 int main(int argc, char** argv) {
 
@@ -37,6 +81,13 @@ int main(int argc, char** argv) {
 	// TRANSCODING-RELATED VARIABLES
 	AVCodecContext* dec_ctx = NULL;
 
+	// filter graph variables
+	AVFilterContext* bufsrc_ctx = NULL;
+	AVFilterContext* bufsnk_ctx = NULL	;
+	AVFilterGraph* fltgrph = avfilter_graph_alloc();
+	AVFilterInOut* filt_in, * filt_out;
+	AVFrame* frame_cropped = av_frame_alloc();
+	char filtarg[1024];
 
 	// general variables
 	static AVFrame* frame = NULL;
@@ -50,6 +101,7 @@ int main(int argc, char** argv) {
 	std::string infile_name, outfile_name, yamlfile_name;
 	bool yaml_mode = false;
 	bool compress_flag = false;
+	bool framecrop_flag = true;
 
 	// struct and vector for storing clip details
 	struct ClipDef {
@@ -158,8 +210,6 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	if(compress_flag)
-		std::cout << "COMPRESSING VIDEO" << std::endl;
 
 
 
@@ -264,7 +314,51 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 	}
+
+
+	
+	// PREPARE FILTER FOR CROPPING DOWN TO DAVINCI XI FRAME
+	// prepare filter graph for cropping image to size
+	// WE NEED THE DECODER ACTIVE TO DO THIS!
+	// TODO: ADD A DIFFERENT FLAG (not just compress_flag)
+	if (compress_flag && framecrop_flag) {
+		snprintf(filtarg, sizeof(filtarg),
+			"buffer=video_size=%dx%d:pix_fmt=%d:time_base=1/1:pixel_aspect=0/1[in];"
+			"[in]crop=x=%d:y=%d:out_w=%d:out_h=%d[out];"
+			"[out]buffersink",
+			dec_ctx->width, dec_ctx->height, dec_ctx->pix_fmt,
+			DAVINCI_CROP_X, DAVINCI_CROP_Y, DAVINCI_CROP_WIDTH, DAVINCI_CROP_HEIGHT);
+		std::cout << "filtarg: " << filtarg << std::endl;
+		if (avfilter_graph_parse2(fltgrph, filtarg, &filt_in, &filt_out) < 0) {
+			std::cout << "ERROR PARSING FILTER GRAPH" << std::endl;
+			return -1;
+		}
+		if (filt_in != NULL) {
+			std::cout << "ERROR: NON-NULL FILTER INPUTS RETURNED BY avfilter_graph_parse2()" << std::endl;
+			return -1;
+		}
+		if (filt_out != NULL) {
+			std::cout << "ERROR: NON-NULL FILTER OUPUTS RETURNED BY avfilter_graph_parse2()" << std::endl;
+			return -1;
+		}
+		if (avfilter_graph_config(fltgrph, NULL) < 0) {
+			std::cout << "ERROR CONFIGURING FILTER GRAPH" << std::endl;
+			return -1;
+		}
+		if ((bufsrc_ctx = avfilter_graph_get_filter(fltgrph, "Parsed_buffer_0")) == 0) {
+			std::cout << "ERROR GETTING SOURCE FILTER CONTEXT" << std::endl;
+			return -1;
+		}
+		if ((bufsnk_ctx = avfilter_graph_get_filter(fltgrph, "Parsed_buffersink_2")) == 0) {
+			std::cout << "ERROR GETTING SINK FILTER CONTEXT" << std::endl;
+			return -1;
+		}
+	}
 		
+
+
+
+
 	// ITERATE THROUGH ALL CLIP DEFINITIONS
 	// EXTRACTING THE DESIRED SEGMENT OF VIDEO TO FILE
 	//std::cout << "Analyzing " << infile_name << "..." << std::endl;
@@ -323,8 +417,14 @@ int main(int argc, char** argv) {
 
 			// initialize encoder
 			// bits per raw sample doesn't need to be set, presumably inferred from pix_fmt
-			enc_ctx->height = dec_ctx->height;
-			enc_ctx->width = dec_ctx->width;
+			if (framecrop_flag) {
+				enc_ctx->height = DAVINCI_CROP_HEIGHT;
+				enc_ctx->width = DAVINCI_CROP_WIDTH;
+			}
+			else {
+				enc_ctx->height = dec_ctx->height;
+				enc_ctx->width = dec_ctx->width;
+			}
 			enc_ctx->sample_aspect_ratio = dec_ctx->sample_aspect_ratio;
 			enc_ctx->pix_fmt = dec_ctx->pix_fmt;
 			enc_ctx->time_base = dec_ctx->time_base;
@@ -443,7 +543,16 @@ int main(int argc, char** argv) {
 					int retval = 0;
 					while (retval >= 0) {
 						if ((retval = avcodec_receive_frame(dec_ctx, frame)) == 0) {
-							
+
+							// crop frame if we want to do this
+							if (framecrop_flag) {
+								crop_frame(frame, frame_cropped, bufsrc_ctx, bufsnk_ctx);
+								//std::cout << "Cropped frame dims: " << frame_cropped->width << "x" << frame_cropped->height << std::endl;
+								av_frame_unref(frame);
+								av_frame_ref(frame, frame_cropped);
+							}
+
+
 							// encode the decoded frame with the output codec
 							AVPacket* outpkt = av_packet_alloc();	
 							int enc_resp = avcodec_send_frame(enc_ctx, frame);
@@ -580,6 +689,11 @@ int main(int argc, char** argv) {
 
 		// done processing this clip, move on to next one
 	}
+
+	// free filter graph
+	avfilter_graph_free(&fltgrph);
+	avfilter_inout_free(&filt_in);
+	avfilter_inout_free(&filt_out);
 
 	// free input-related memory
 	avcodec_free_context(&dec_ctx);
