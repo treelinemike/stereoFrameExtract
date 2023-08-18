@@ -13,7 +13,7 @@
 
 #define DAVINCI_CROP_WIDTH 894
 #define DAVINCI_CROP_HEIGHT 714
-#define DAVINCI_CROP_X 193
+#define DAVINCI_CROP_X 192
 #define DAVINCI_CROP_Y 3
 
 // need extern to include FFmpeg C libraries
@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
 	AVStream* ostream = NULL;
 	const AVCodec* enc = NULL;
 	AVCodecContext* enc_ctx = NULL;
+	AVCodecID outcodec_id = AV_CODEC_ID_NONE;
 
 	// TRANSCODING-RELATED VARIABLES
 	AVCodecContext* dec_ctx = NULL;
@@ -101,8 +102,8 @@ int main(int argc, char** argv) {
 	std::string infile_name, outfile_name, yamlfile_name;
 	bool yaml_mode = false;
 	bool compress_flag = false;
-	bool framecrop_flag = true;
-
+	bool framecrop_flag = false;
+	bool transcode_flag = false;
 	// struct and vector for storing clip details
 	struct ClipDef {
 		std::string name;
@@ -119,6 +120,7 @@ int main(int argc, char** argv) {
 			("l,last", "number of last frame to inclue in output video", cxxopts::value<uint64_t>())
 			("o,output", "name of output file", cxxopts::value<std::string>())
 			("i,input", "name of input file", cxxopts::value<std::string>())
+			("r", "flag to crop each frame to da Vinci Xi valid region", cxxopts::value<bool>()->default_value("false"))
 			("z", "flag to compress output video", cxxopts::value<bool>()->default_value("false"))
 			("c,config", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
 		auto cxxopts_result = options.parse(argc, argv);
@@ -135,6 +137,7 @@ int main(int argc, char** argv) {
 			(cxxopts_result.count("input") == 1)) {
 			yaml_mode = false;
 			compress_flag = cxxopts_result["z"].as<bool>();
+			framecrop_flag = cxxopts_result["r"].as<bool>();
 			firstframe = cxxopts_result["first"].as<uint64_t>();
 			lastframe = cxxopts_result["last"].as<uint64_t>();
 			infile_name = cxxopts_result["input"].as<std::string>();
@@ -179,6 +182,16 @@ int main(int argc, char** argv) {
 			else {
 				compress_flag = false;
 				std::cout << "YAML: no compression set, not compressing output" << std::endl;
+			}
+
+			// get frame crop flag
+			if (config["framecrop"]) {
+				framecrop_flag = config["framecrop"].as<bool>();
+				//std::cout << "YAML framecrop: " << compress_flag << std::endl;
+			}
+			else {
+				framecrop_flag = false;
+				std::cout << "YAML: no framecrop set, not spatially cropping frames output" << std::endl;
 			}
 
 			// parse each clip definition
@@ -241,11 +254,11 @@ int main(int argc, char** argv) {
 			codec_params->codec_type,
 			codec_params->codec_id);
 
-		// determine whether this is v210 encoded video
-		if (codec_params->codec_type == AVMEDIA_TYPE_VIDEO && codec_params->codec_id == AV_CODEC_ID_V210) {
-			//std::cout << "FOUND v210 ENCODED VIDEO" << std::endl;
+		// determine whether this is v210 or FFV1 encoded video
+		if (codec_params->codec_type == AVMEDIA_TYPE_VIDEO && (codec_params->codec_id == AV_CODEC_ID_V210 || codec_params->codec_id == AV_CODEC_ID_FFV1)) {
+			//std::cout << "FOUND v210 or FFV1 ENCODED VIDEO" << std::endl;
 			if (found_video_stream) {
-				std::cout << "ERROR: MORE THAN ONE v210 VIDEO STREAM FOUND!" << std::endl;
+				std::cout << "ERROR: MORE THAN ONE v210 or FFV1 VIDEO STREAM FOUND!" << std::endl;
 				return -1;
 			}
 			else {
@@ -255,9 +268,9 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	// error out if we didn't find v210 video
+	// error out if we didn't find v210 or FFV1 video
 	if (!found_video_stream) {
-		std::cout << "ERROR: DID NOT FIND A V210 VIDEO STREAM" << std::endl;
+		std::cout << "ERROR: DID NOT FIND A V210 OR FFV1 VIDEO STREAM" << std::endl;
 		return -1;
 	}
 
@@ -269,6 +282,17 @@ int main(int argc, char** argv) {
 		codec_params->codec_type,
 		codec_params->codec_id);
 	std::cout << "stream timebase: " << (istream->time_base).num << "/" << (istream->time_base).den << std::endl;
+
+
+	// figure out transcoding, etc.
+	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : AV_CODEC_ID_V210;
+	if((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)){
+		transcode_flag = false;
+	} else if((codec_params->codec_id == AV_CODEC_ID_FFV1) && (compress_flag) && (!framecrop_flag)){
+		transcode_flag = false;
+	} else {
+		transcode_flag = true;
+	}
 
 	// set scaling
 	pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
@@ -282,8 +306,8 @@ int main(int argc, char** argv) {
 	}
 
 
-	// SET UP DECODER (only needed if transcoding / compressing video - otherwise just transmux packets) 
-	if (compress_flag) {
+	// SET UP DECODER (only needed if transcoding - otherwise just transmux packets) 
+	if (transcode_flag) {
 		// open the decoder
 		const AVCodec* dec = NULL;
 		dec = avcodec_find_decoder(istream->codecpar->codec_id);
@@ -321,7 +345,7 @@ int main(int argc, char** argv) {
 	// prepare filter graph for cropping image to size
 	// WE NEED THE DECODER ACTIVE TO DO THIS!
 	// TODO: ADD A DIFFERENT FLAG (not just compress_flag)
-	if (compress_flag && framecrop_flag) {
+	if (framecrop_flag) {
 		snprintf(filtarg, sizeof(filtarg),
 			"buffer=video_size=%dx%d:pix_fmt=%d:time_base=1/1:pixel_aspect=0/1[in];"
 			"[in]crop=x=%d:y=%d:out_w=%d:out_h=%d[out];"
@@ -403,8 +427,9 @@ int main(int argc, char** argv) {
 		}
 
 		// SET UP ENCODER (only needed if transcoding / compressing video - otherwise just transmux packets)
-		if (compress_flag) {
-			if ((enc = avcodec_find_encoder(AV_CODEC_ID_FFV1)) == 0) {
+		if (transcode_flag) {
+			
+			if ((enc = avcodec_find_encoder(outcodec_id)) == 0) {
 				std::cout << "ERROR: COULD NOT FIND ENCODER" << std::endl;
 				return -1;
 			}
@@ -521,7 +546,7 @@ int main(int argc, char** argv) {
 				//std::cout << "Adding packet of size: " << inpkt->size << std::endl;
 				//printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",inpkt->pts,inpkt->dts,inpkt->pos, (inpkt->flags & AV_PKT_FLAG_KEY) ); 
 
-				if (!compress_flag) { // TRANSMUXING ONLY
+				if (!transcode_flag) { // TRANSMUXING ONLY
 
 					// mux packet into output format
 					inpkt->stream_index = ostream->index;

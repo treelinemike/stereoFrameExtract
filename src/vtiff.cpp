@@ -1,4 +1,4 @@
-// extract frames from a v210-encoded MOV video file to 16-bit RGB TIFF  
+// extract frames from a v210- or FFV1-encoded MOV video file to 16-bit RGB TIFF  
 
 // followed several ffmpeg examples to create this
 
@@ -411,40 +411,3 @@ int main(int argc, char ** argv){
     // done
     return 0;
 }
-
-
-
-
-
-/*  OLD CODE TRYING OUT ENCODER
-// get our encoder ready
-AVCodec *tiff_codec = NULL;
-if( (tiff_codec = avcodec_find_encoder(AV_CODEC_ID_TIFF)) == NULL){
-std::cout << "ERROR: COULD NOT FIND OUTPUT IMAGE ENCODER" << std::endl;
-return -1;
-}
-
-AVCodecContext * img_ctx = NULL;
-if( !(img_ctx = avcodec_alloc_context3(tiff_codec)) ){
-std::cout << "ERROR: COULD NOT ALLOCATE CONTEXT FOR IMAGES" << std::endl;
-return -1;
-}
-img_ctx->pix_fmt = AV_PIX_FMT_YUV420P;//AV_PIX_FMT_YUV422P;//(AVPixelFormat)expected_pix_fmt;
-img_ctx->time_base = (AVRational){1,1};
-img_ctx->width = expected_width;
-img_ctx->height = expected_height;
-// initialize encoder
-std::cout << "test" << std::endl;
-if( avcodec_open2(img_ctx, tiff_codec, NULL) < 0){
-std::cout << "ERROR: COULD NOT INITIALIZE ENCODER" << std::endl;
-return -1;
-}
-
-AVPacket *pkt_enc = NULL;
-pkt_enc = av_packet_alloc();
-if(!pkt_enc){
-std::cout << "ERROR: COULD NOT ALLOCATE ENCODER PACKET POINTER" << std::endl;
-return -1;
-}
-
-*/
