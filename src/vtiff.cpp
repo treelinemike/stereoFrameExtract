@@ -186,7 +186,7 @@ int main(int argc, char ** argv){
             if(found_video_stream){
                 std::cout << "ERROR: MORE THAN ONE READABLE VIDEO STREAM FOUND!" << std::endl;
                 return -1;
-            } else {
+            } else {    
                 video_stream_idx = stream_idx;
                 found_video_stream = true;
             }
@@ -366,6 +366,7 @@ int main(int argc, char ** argv){
                             // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
                             // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
                             if (display_flag) {
+
                                 // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
                                 cv::Mat cv_frame_rgb(expected_height, expected_width, CV_16UC3, (uint16_t*)converted_frame->data[0]);
                                 cv::Mat cv_frame_bgr;

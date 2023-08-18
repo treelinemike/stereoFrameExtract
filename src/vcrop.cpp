@@ -13,7 +13,7 @@
 
 #define DAVINCI_CROP_WIDTH 894
 #define DAVINCI_CROP_HEIGHT 714
-#define DAVINCI_CROP_X 192
+#define DAVINCI_CROP_X 194  // TODO: DOUBLE CHECK THIS!
 #define DAVINCI_CROP_Y 3
 
 // need extern to include FFmpeg C libraries
@@ -288,10 +288,13 @@ int main(int argc, char** argv) {
 	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : AV_CODEC_ID_V210;
 	if((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)){
 		transcode_flag = false;
+		std::cout << "*****TRANSMUXING**********" << std::endl;
 	} else if((codec_params->codec_id == AV_CODEC_ID_FFV1) && (compress_flag) && (!framecrop_flag)){
 		transcode_flag = false;
+		std::cout << "*****TRANSMUXING**********" << std::endl;
 	} else {
 		transcode_flag = true;
+		std::cout << "*****TRANSCODING**********" << std::endl;
 	}
 
 	// set scaling
@@ -465,7 +468,7 @@ int main(int argc, char** argv) {
 		}
 
 		// update output stream and encoder codec parameters
-		if (!compress_flag) {
+		if (!transcode_flag) {
 			// TRANSMUXING ONLY: get codec parameters from input stream
 			if (avcodec_parameters_copy(ostream->codecpar, istream->codecpar) < 0) {
 				std::cout << "ERROR: COULD NOT COPY CODEC PARAMETERS FROM INPUT STREAM TO OUTPUT STREAM" << std::endl;
