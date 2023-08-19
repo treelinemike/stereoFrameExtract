@@ -11,9 +11,9 @@ INC_SYS_PARAMS = $(addprefix -isystem,$(INCLUDE_SYS))
 INC_PARAMS = $(addprefix -I,$(INCLUDE))
 LIB_PARAMS = $(addprefix -L,$(LIB))
 
-default: vcrop vtiff
+default: vclip vtiff
 
-vcrop: vcrop.o
+vclip: vclip.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_CROP)
 	rm -f vcrop.o
 
@@ -21,12 +21,12 @@ vtiff: vtiff.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_TIFF)
 	rm -f vtiff.o
 
-vcrop.o: ./src/vcrop.cpp
+vclip.o: ./src/vclip.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
 
 vtiff.o: ./src/vtiff.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
 
 clean:
-	rm -f vcrop vtiff
+	rm -f vclip vtiff
 	
