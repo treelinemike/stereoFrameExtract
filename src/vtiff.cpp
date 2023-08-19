@@ -305,7 +305,7 @@ int main(int argc, char ** argv){
     unsigned int my_frame_counter = 0;
     int avreadframe_ret = 123;
 
-    // TODO: SEEK HERE TO EACH FRAME
+    // find the exact frame that was requested
     for(auto & val : framelist){
 
         std::cout << "Attempting to decode frame " << val << std::endl;
@@ -367,15 +367,30 @@ int main(int argc, char ** argv){
                             // CONFIRMED 02-AUG-23 THAT TIFF PIXEL DATA IS IDENTICAL (AFTER LOADING INTO MATLAB)
                             if (display_flag) {
 
+                                // generally we could just point the cv::Mat to converted_frame->data[0]
+                                // but after cropping we may end up with extra data outside the frame
+                                // so to be sure we'll just copy over line by line
+
                                 // BGR48LE plays nicely with OpenCV (phew!) so convert just copy memory and convert to BGR
-                                cv::Mat cv_frame_rgb(expected_height, expected_width, CV_16UC3, (uint16_t*)converted_frame->data[0]);
+                                //cv::Mat cv_frame_rgb(expected_height, expected_width, CV_16UC3, (uint16_t*)converted_frame->data[0]);
+                                cv::Mat cv_frame_rgb(expected_height, expected_width, CV_16UC3);
+                                uint16_t* cvptr = cv_frame_rgb.ptr<uint16_t>();
+                                uint16_t* avptr = NULL;
+                                uint16_t linesize = converted_frame->linesize[0];
+                                for (uint16_t rowidx = 0; rowidx < expected_height; ++rowidx) {
+                                    avptr = (uint16_t*)converted_frame->data[0] + rowidx * (linesize / 2);
+                                    memcpy(cvptr, avptr, (uint64_t)6 * (uint64_t)expected_width);
+                                    cvptr += 3 * expected_width;
+                                }
+
                                 cv::Mat cv_frame_bgr;
                                 cv::cvtColor(cv_frame_rgb, cv_frame_bgr, cv::COLOR_RGB2BGR);
+                                std::cout << "Image rows: " << cv_frame_bgr.rows << ", cols: " << cv_frame_bgr.cols << std::endl;
 
                                 // write  to file
-                                //char img_filename[255]; 
-                                //sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
-                                //cv::imwrite(img_filename,cv_frame_bgr);
+                                char img_filename[255]; 
+                                sprintf(img_filename,"cv_frame_%08d.tif",my_frame_counter);
+                                cv::imwrite(img_filename,cv_frame_bgr);
 
 
                                 char framenum_str[255];

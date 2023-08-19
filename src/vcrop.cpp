@@ -11,10 +11,13 @@
 // and sprintf() instead of sprintf_s(), etc...
 #define _CRT_SECURE_NO_DEPRECATE
 
-#define DAVINCI_CROP_WIDTH 894
+// CROPPING PARAMETERS FOR REDUICNG YUV422 (v210) VIDEO TO DA VINCI XI 720p FRAME SIZE
+// NOTE: WILL LEAVE 1px BLACK BAR ON LEFT AND RIGHT, OTHERWISE WE'D BE SPLITING/SHIFTING CHROMA COMPONENTS
+// ONCE FRAME IS CONVERTED TO RGB WE CAN CROP AGAIN
+#define DAVINCI_CROP_WIDTH 896
 #define DAVINCI_CROP_HEIGHT 714
-#define DAVINCI_CROP_X 194  // TODO: DOUBLE CHECK THIS!
-#define DAVINCI_CROP_Y 3
+#define DAVINCI_CROP_X 192       // zero indexed, first COLUMN to include in cropped ouput, MUST BE EVEN FOR YUV422
+#define DAVINCI_CROP_Y 3         // zero indexed, first ROW to include in cropped output, MAY BE ODD FOR YUV422 (NOT FOR YUV420)
 
 // need extern to include FFmpeg C libraries
 extern "C" {
@@ -285,16 +288,12 @@ int main(int argc, char** argv) {
 
 
 	// figure out transcoding, etc.
+	// note: FFV1->FFV1 needs to be transcoded because we can't transmux packets starting from a non-keyframe
 	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : AV_CODEC_ID_V210;
 	if((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)){
 		transcode_flag = false;
-		std::cout << "*****TRANSMUXING**********" << std::endl;
-	} else if((codec_params->codec_id == AV_CODEC_ID_FFV1) && (compress_flag) && (!framecrop_flag)){
-		transcode_flag = false;
-		std::cout << "*****TRANSMUXING**********" << std::endl;
 	} else {
 		transcode_flag = true;
-		std::cout << "*****TRANSCODING**********" << std::endl;
 	}
 
 	// set scaling
