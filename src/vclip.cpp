@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
 			(cxxopts_result.count("input") == 1)) {
 			yaml_mode = false;
 			compress_flag = cxxopts_result["z"].as<bool>();
-			framecrop_flag = cxxopts_result["r"].as<bool>();
+			framecrop_flag = cxxopts_result["c"].as<bool>();
 			firstframe = cxxopts_result["first"].as<uint64_t>();
 			lastframe = cxxopts_result["last"].as<uint64_t>();
 			infile_name = cxxopts_result["input"].as<std::string>();
