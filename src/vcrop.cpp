@@ -525,20 +525,39 @@ int main(int argc, char** argv) {
 
 		// find start of clip
 		std::cout << "Seeking to first frame in clip" << std::endl;
-		if (av_seek_frame(ifmt_ctx, video_stream_idx, firstframe * pts_dts_scale, 0) < 0) {
+		if (av_seek_frame(ifmt_ctx, video_stream_idx, firstframe * pts_dts_scale, AVSEEK_FLAG_BACKWARD) < 0){ // seeks to closest previous keyframe
 			std::cout << "ERROR: SEEK FAILED" << std::endl;
 			return -1;
 		}
 
 		// now we start reading
-		while (av_read_frame(ifmt_ctx, inpkt) >= 0 && my_frame_counter < num_frames_to_extract) {
+		bool found_frame = false;
+		while ( (!found_frame) || (my_frame_counter < num_frames_to_extract)) {
+			if (av_read_frame(ifmt_ctx, inpkt) < 0) {
+				std::cout << "ERROR: COULD NOT READ FRAME" << std::endl;
+				return -1;
+			}
 			if ((unsigned int)(inpkt->stream_index) == video_stream_idx) {
+
+				// determine whether we're at our desired frame or if we've passed it
+				// if we're before it we need to decode everything from the previous keyframe
+				if (!found_frame) {
+					if ((uint64_t)inpkt->dts == firstframe * pts_dts_scale) {    // we happened to seek right to where we wanted to be
+						found_frame = true;
+					}
+					else if ((uint64_t)inpkt->dts > (firstframe * pts_dts_scale)) { // we missed our frame!
+						std::cout << "ERROR: SEEK PASSED THE DESIRED FRAME!" << std::endl;
+						return -1;
+					}
+				}
 
 				// skip this packet if it is flagged to discard
 				if (inpkt->flags & AV_PKT_FLAG_DISCARD) {
 					std::cout << "Discarding packet." << std::endl;
 					continue;
 				}
+
+				//std::cout << " Decoding frame " << (uint64_t)(inpkt->dts / pts_dts_scale) << std::endl;
 
 				// correct PTS and DTS for output stream
 				inpkt->pts = my_frame_counter * pts_dts_scale;
@@ -549,14 +568,15 @@ int main(int argc, char** argv) {
 				//printf("PTS: %ld; DTS: %ld; POS: %ld; FLAG? %d\n",inpkt->pts,inpkt->dts,inpkt->pos, (inpkt->flags & AV_PKT_FLAG_KEY) ); 
 
 				if (!transcode_flag) { // TRANSMUXING ONLY
-
-					// mux packet into output format
-					inpkt->stream_index = ostream->index;
-					if (av_interleaved_write_frame(ofmt_ctx, inpkt) < 0) {
-						std::cout << "ERROR: COULD NOT WRTIE PACKET TO OUTPUT STREAM" << std::endl;
-						return -1;
+					if (found_frame) {
+						// mux packet into output format
+						inpkt->stream_index = ostream->index;
+						if (av_interleaved_write_frame(ofmt_ctx, inpkt) < 0) {
+							std::cout << "ERROR: COULD NOT WRTIE PACKET TO OUTPUT STREAM" << std::endl;
+							return -1;
+						}
+						++my_frame_counter;
 					}
-					++my_frame_counter;
 				}
 				else { // TRANSCODING
 
@@ -571,68 +591,73 @@ int main(int argc, char** argv) {
 					while (retval >= 0) {
 						if ((retval = avcodec_receive_frame(dec_ctx, frame)) == 0) {
 
-							// crop frame if we want to do this
-							if (framecrop_flag) {
-								crop_frame(frame, frame_cropped, bufsrc_ctx, bufsnk_ctx);
-								//std::cout << "Cropped frame dims: " << frame_cropped->width << "x" << frame_cropped->height << std::endl;
-								av_frame_unref(frame);
-								av_frame_ref(frame, frame_cropped);
+							if (found_frame) {
+								// crop frame if we want to do this
+								if (framecrop_flag) {
+									crop_frame(frame, frame_cropped, bufsrc_ctx, bufsnk_ctx);
+									//std::cout << "Cropped frame dims: " << frame_cropped->width << "x" << frame_cropped->height << std::endl;
+									av_frame_unref(frame);
+									av_frame_ref(frame, frame_cropped);
+								}
+
+
+								// encode the decoded frame with the output codec
+								AVPacket* outpkt = av_packet_alloc();
+								int enc_resp = avcodec_send_frame(enc_ctx, frame);
+
+								while (enc_resp >= 0) {
+									enc_resp = avcodec_receive_packet(enc_ctx, outpkt);
+									if (enc_resp == AVERROR(EAGAIN) || enc_resp == AVERROR_EOF) {
+										//std::cout << "NO PACKET AVAILBLE FROM ENCODER" << std::endl;
+										break;
+									}
+									else if (enc_resp < 0) {
+										std::cout << "ERROR RECEIVING PACKET FROM ENCODER" << std::endl;
+										return -1;
+									}
+
+									// correct output stream parameters
+									outpkt->stream_index = ostream->index;
+									outpkt->pts = (my_frame_counter * pts_dts_scale);
+									outpkt->dts = (my_frame_counter * pts_dts_scale);
+									outpkt->duration = pts_dts_scale;
+									av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
+
+									//std::cout << "Wrote pts = " << outpkt->pts << ", dts = " << outpkt->dts << ", my_frame_counter = " << my_frame_counter << " , scale " << pts_dts_scale << ", duration = " << outpkt->duration << std::endl;
+
+									// mux packet into container
+									if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
+										std::cout << "ERROR WRITING COMPRESSED PACKET: " << enc_resp << std::endl;
+										return -1;
+									}
+
+
+									// increment frame counter
+									++my_frame_counter;
+								}
+
+								// done with this packet, so unreference and free it
+								av_packet_unref(outpkt);
+								av_packet_free(&outpkt);
 							}
-
-
-							// encode the decoded frame with the output codec
-							AVPacket* outpkt = av_packet_alloc();	
-							int enc_resp = avcodec_send_frame(enc_ctx, frame);
-
-							while (enc_resp >= 0) {
-								enc_resp = avcodec_receive_packet(enc_ctx, outpkt);
-								if (enc_resp == AVERROR(EAGAIN) || enc_resp == AVERROR_EOF) {
-									//std::cout << "NO PACKET AVAILBLE FROM ENCODER" << std::endl;
-									break;
-								}
-								else if (enc_resp < 0) {
-									std::cout << "ERROR RECEIVING PACKET FROM ENCODER" << std::endl;
-									return -1;
-								}
-								
-								// correct output stream parameters
-								outpkt->stream_index = ostream->index;
-								outpkt->pts = (my_frame_counter * pts_dts_scale);
-								outpkt->dts = (my_frame_counter * pts_dts_scale);
-								outpkt->duration = pts_dts_scale;
-								av_packet_rescale_ts(outpkt, istream->time_base, ostream->time_base);  // really this will do nothing b/c we've enforced that the output timebase must equal the input timebase
-								
-								//std::cout << "Wrote pts = " << outpkt->pts << ", dts = " << outpkt->dts << ", my_frame_counter = " << my_frame_counter << " , scale " << pts_dts_scale << ", duration = " << outpkt->duration << std::endl;
-
-								// mux packet into container
-								if ((enc_resp = av_interleaved_write_frame(ofmt_ctx, outpkt)) != 0) {
-									std::cout << "ERROR WRITING COMPRESSED PACKET: " << enc_resp << std::endl;
-									return -1;
-								}
-
-								
-								// increment frame counter
-								++my_frame_counter;
-							}
-
-							// done with this packet, so unreference and free it
-							av_packet_unref(outpkt);
-							av_packet_free(&outpkt);
-
 
 						}
 	
 						// unreference the frame
 						av_frame_unref(frame);
 						//av_frame_free(&frame);
+
 					}
 				}
 
-				if ((int)((my_frame_counter * 100) / num_frames_to_extract) > prev_pct) {
-					prev_pct = (int)((my_frame_counter * 100) / num_frames_to_extract);
-					printf("\r%4d%% (%8ld/%8ld)", prev_pct, my_frame_counter, num_frames_to_extract);
-					fflush(stdout);
+				if (found_frame) {
+					if ((int)((my_frame_counter * 100) / num_frames_to_extract) > prev_pct) {
+						prev_pct = (int)((my_frame_counter * 100) / num_frames_to_extract);
+						printf("\r%4d%% (%8ld/%8ld)", prev_pct, my_frame_counter, num_frames_to_extract);
+						fflush(stdout);
+					}
 				}
+
 			}
 
 			// unreference the packet pointer

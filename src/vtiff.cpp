@@ -303,7 +303,6 @@ int main(int argc, char ** argv){
 
     // now we start reading
     unsigned int my_frame_counter = 0;
-    int avreadframe_ret = 123;
 
     // find the exact frame that was requested
     for(auto & val : framelist){
@@ -315,7 +314,7 @@ int main(int argc, char ** argv){
         }
         bool found_frame = false;
         while(!found_frame){
-            if( (avreadframe_ret = av_read_frame(ifmt_ctx,pkt)) < 0 ){
+            if(av_read_frame(ifmt_ctx,pkt) < 0){
                 std::cout << "ERROR: COULD NOT READ FRAME" << std::endl;
                 return -1;
             }
