@@ -87,11 +87,11 @@ int main(int argc, char** argv) {
 
 	// filter graph variables
 	AVFilterContext* bufsrc_ctx = NULL;
-	AVFilterContext* bufsnk_ctx = NULL	;
+	AVFilterContext* bufsnk_ctx = NULL;
 	AVFilterGraph* fltgrph = avfilter_graph_alloc();
 	AVFilterInOut* filt_in, * filt_out;
 	AVFrame* frame_cropped = av_frame_alloc();
-	char filtarg[1024];
+	char filtarg[255];
 
 	// general variables
 	static AVFrame* frame = NULL;
@@ -107,6 +107,7 @@ int main(int argc, char** argv) {
 	bool compress_flag = false;
 	bool framecrop_flag = false;
 	bool transcode_flag = false;
+	
 	// struct and vector for storing clip details
 	struct ClipDef {
 		std::string name;
@@ -114,6 +115,7 @@ int main(int argc, char** argv) {
 		uint64_t last_frame;
 	};
 	std::vector<ClipDef> clips;
+
 
 	// PARSE COMMAND LINE OPTIONS
 	try
@@ -123,9 +125,9 @@ int main(int argc, char** argv) {
 			("l,last", "number of last frame to inclue in output video", cxxopts::value<uint64_t>())
 			("o,output", "name of output file", cxxopts::value<std::string>())
 			("i,input", "name of input file", cxxopts::value<std::string>())
-			("r", "flag to crop each frame to da Vinci Xi valid region", cxxopts::value<bool>()->default_value("false"))
+			("c", "flag to crop each frame to da Vinci Xi valid region", cxxopts::value<bool>()->default_value("false"))
 			("z", "flag to compress output video", cxxopts::value<bool>()->default_value("false"))
-			("c,config", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
+			("y,yamlconfig", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
 		auto cxxopts_result = options.parse(argc, argv);
 
 		if (cxxopts_result.count("config") == 1)
@@ -290,16 +292,17 @@ int main(int argc, char** argv) {
 	// figure out transcoding, etc.
 	// note: FFV1->FFV1 needs to be transcoded because we can't transmux packets starting from a non-keyframe
 	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : AV_CODEC_ID_V210;
-	if((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)){
+	if ((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)) {
 		transcode_flag = false;
-	} else {
+	}
+	else {
 		transcode_flag = true;
 	}
 
 	// set scaling
 	pts_dts_scale = (uint64_t)av_q2d(av_mul_q(av_inv_q(istream->time_base), av_inv_q(istream->avg_frame_rate)));
 	//std::cout << "pts_dts_scale = " << pts_dts_scale << std::endl;
-	
+
 	// allocate frame, this can happen anywhere
 	// we will keep reusing the frame memory
 	if ((frame = av_frame_alloc()) == 0) {
@@ -342,11 +345,16 @@ int main(int argc, char** argv) {
 	}
 
 
-	
+
 	// PREPARE FILTER FOR CROPPING DOWN TO DAVINCI XI FRAME
 	// prepare filter graph for cropping image to size
 	// WE NEED THE DECODER ACTIVE TO DO THIS!
 	// TODO: ADD A DIFFERENT FLAG (not just compress_flag)
+	if (framecrop_flag && ((dec_ctx->width != 1280) || (dec_ctx->height != 720))) {
+		framecrop_flag = false;
+		//std::cout << "\033[1;35mInput video dimensions not compatible with cropping, output will not be cropped\033[0m" << std::endl;
+		std::cout << "Input video dimensions not compatible with cropping, output will not be cropped" << std::endl;
+	}
 	if (framecrop_flag) {
 		snprintf(filtarg, sizeof(filtarg),
 			"buffer=video_size=%dx%d:pix_fmt=%d:time_base=1/1:pixel_aspect=0/1[in];"
