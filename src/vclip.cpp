@@ -89,7 +89,8 @@ int main(int argc, char** argv) {
 	AVFilterContext* bufsrc_ctx = NULL;
 	AVFilterContext* bufsnk_ctx = NULL;
 	AVFilterGraph* fltgrph = avfilter_graph_alloc();
-	AVFilterInOut* filt_in, * filt_out;
+	AVFilterInOut* filt_in = avfilter_inout_alloc();
+    AVFilterInOut* filt_out = avfilter_inout_alloc();
 	AVFrame* frame_cropped = av_frame_alloc();
 	char filtarg[255];
 
@@ -130,10 +131,10 @@ int main(int argc, char** argv) {
 			("y,yamlconfig", "name of config YAML file - use without setting any other options", cxxopts::value<std::string>());
 		auto cxxopts_result = options.parse(argc, argv);
 
-		if (cxxopts_result.count("config") == 1)
+		if (cxxopts_result.count("yamlconfig") == 1)
 		{
 			yaml_mode = true;
-			yamlfile_name = cxxopts_result["config"].as<std::string>();
+			yamlfile_name = cxxopts_result["yamlconfig"].as<std::string>();
 		}
 		else if (
 			(cxxopts_result.count("first") == 1) &&
@@ -742,6 +743,8 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
+        std::cout << "trailer written" << std::endl;
+
 		// free output-related memory
 		avcodec_free_context(&enc_ctx);
 		avio_close(ofmt_ctx->pb);
@@ -751,9 +754,9 @@ int main(int argc, char** argv) {
 	}
 
 	// free filter graph
-	avfilter_graph_free(&fltgrph);
 	avfilter_inout_free(&filt_in);
 	avfilter_inout_free(&filt_out);
+	avfilter_graph_free(&fltgrph);
 
 	// free input-related memory
 	avcodec_free_context(&dec_ctx);
