@@ -1,5 +1,6 @@
 input_file: 20230521_0deg_cal_L01.mov
 compress: true
+framecrop: true
 clips:
   testclip_L01.mov:
     first: 21208
