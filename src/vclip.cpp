@@ -652,8 +652,9 @@ int main(int argc, char** argv) {
 
 						}
 	
-						// unreference the frame
+						// unreference the frame pointers
 						av_frame_unref(frame);
+						av_frame_unref(frame_cropped);
 						//av_frame_free(&frame);
 
 					}
@@ -742,8 +743,6 @@ int main(int argc, char** argv) {
 			std::cout << "ERROR WRITING OUTPUT FILE TRAILER" << std::endl;
 			return -1;
 		}
-
-        std::cout << "trailer written" << std::endl;
 
 		// free output-related memory
 		avcodec_free_context(&enc_ctx);
