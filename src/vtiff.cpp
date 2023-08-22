@@ -22,6 +22,7 @@ extern "C" {
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <cxxopts.hpp>
+#include <chrono>
 
 // CROPPING PARAMETERS FOR REDUICNG YUV422 (v210) VIDEO TO DA VINCI XI 720p FRAME SIZE
 // NOTE: WILL LEAVE 1px BLACK BAR ON LEFT AND RIGHT, OTHERWISE WE'D BE SPLITING/SHIFTING CHROMA COMPONENTS
@@ -344,9 +345,9 @@ int main(int argc, char ** argv){
     }
 
     // PREPARE FILTER FOR CROPPING DOWN TO DAVINCI XI FRAME
-// prepare filter graph for cropping image to size
-// WE NEED THE DECODER ACTIVE TO DO THIS!
-// TODO: ADD A DIFFERENT FLAG (not just compress_flag)
+    // prepare filter graph for cropping image to size
+    // WE NEED THE DECODER ACTIVE TO DO THIS!
+    // TODO: ADD A DIFFERENT FLAG (not just compress_flag)
     if (framecrop_flag && (dec_ctx->width == 1280) && (dec_ctx->height == 720)) {
         crop_w = DAVINCI_FULL_CROP_WIDTH;
         crop_h = DAVINCI_FULL_CROP_HEIGHT;
@@ -397,15 +398,15 @@ int main(int argc, char ** argv){
         }
     }
 
-
     // initialize some OpenCV matrices 
     cv::Mat cvFrameYUV(expected_height, expected_width, CV_8UC2);
     cv::Mat cvFrameBGR;
 
-    // now we start reading
-    unsigned int my_frame_counter = 0;
+    // start timer
+    auto start_time = std::chrono::high_resolution_clock::now();
 
     // find the exact frame that was requested
+    unsigned int my_frame_counter = 0;
     for(auto & val : framelist){
 
         std::cout << "Attempting to decode frame " << val << std::endl;
@@ -525,7 +526,10 @@ int main(int argc, char ** argv){
         }
     }
 
-    std::cout << "Saved " << my_frame_counter << " frames!" << std::endl;
+    // stop timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+    std::cout << "Saved " << my_frame_counter << " frames in " << duration.count() << "seconds" << std::endl;
 
     // free filter graph
     avfilter_inout_free(&filt_in);

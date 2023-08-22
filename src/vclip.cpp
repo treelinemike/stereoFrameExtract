@@ -34,6 +34,7 @@ extern "C" {
 #include <string>
 #include <cxxopts.hpp>  // https://www.github.com/jarro2783/cxxopts
 #include <yaml-cpp/yaml.h>
+#include <chrono>
 
 
 // prepare a filter graph for cropping frames out of black border (da Vinci Xi)
@@ -532,6 +533,9 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
+		// start timer
+		auto start_time = std::chrono::high_resolution_clock::now();
+
 		// find start of clip
 		std::cout << "Seeking to first frame in clip" << std::endl;
 		if (av_seek_frame(ifmt_ctx, video_stream_idx, firstframe * pts_dts_scale, AVSEEK_FLAG_BACKWARD) < 0){ // seeks to closest previous keyframe
@@ -749,8 +753,14 @@ int main(int argc, char** argv) {
 		avio_close(ofmt_ctx->pb);
 		avformat_free_context(ofmt_ctx);
 
-		// done processing this clip, move on to next one
+		// done processing this clip, stop timer and move on to next one
+		auto end_time = std::chrono::high_resolution_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
+		std::cout << "Processed " << my_frame_counter << " frames in " << duration.count() << "seconds" << std::endl;
+
 	}
+
+
 
 	// free filter graph
 	avfilter_inout_free(&filt_in);
