@@ -529,7 +529,7 @@ int main(int argc, char ** argv){
     // stop timer
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
-    std::cout << "Saved " << my_frame_counter << " frames in " << duration.count() << "seconds" << std::endl;
+    std::cout << "Saved " << my_frame_counter << " frames in " << duration.count() << " seconds" << std::endl;
 
     // free filter graph
     avfilter_inout_free(&filt_in);

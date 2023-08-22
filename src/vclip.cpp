@@ -756,7 +756,7 @@ int main(int argc, char** argv) {
 		// done processing this clip, stop timer and move on to next one
 		auto end_time = std::chrono::high_resolution_clock::now();
 		auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time);
-		std::cout << "Processed " << my_frame_counter << " frames in " << duration.count() << "seconds" << std::endl;
+		std::cout << "Processed " << my_frame_counter << " frames in " << duration.count() << " seconds" << std::endl;
 
 	}
 
