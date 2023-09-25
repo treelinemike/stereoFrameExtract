@@ -1,0 +1,1 @@
+for /r %%y in (*.yaml) do vclip.exe -y "%%y"
