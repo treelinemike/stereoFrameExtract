@@ -64,7 +64,7 @@ int crop_frame(const AVFrame* inframe, AVFrame* outframe, AVFilterContext* bufsr
     return 0;
 }
 
-int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
+int write_avframe_to_file(AVFrame *frame, unsigned int frame_num, std::string output_prefix){
 
     const AVCodec *tiff_codec = NULL;
     AVCodecContext *tiff_context = NULL;
@@ -122,7 +122,7 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
     }
 
     // write packet to file
-    sprintf(outfile_name,"frame%08d.tif",frame_num);
+    sprintf(outfile_name,"%s%08d.tif",output_prefix,frame_num);
     outfile = fopen(outfile_name,"wb");
     fwrite(packet->data,1,packet->size,outfile);
     fclose(outfile);
@@ -136,7 +136,7 @@ int write_avframe_to_file(AVFrame *frame, unsigned int frame_num){
 int main(int argc, char ** argv){
 
     cxxopts::Options options("vtiff","video frame extraction to tiff");
-    std::string framelist_file_name, input_file_name;    
+    std::string framelist_file_name, input_file_name, output_prefix;    
     std::vector<uint64_t> framelist;
     std::string temp, line, word;
     std::fstream framelist_file;
@@ -160,6 +160,7 @@ int main(int argc, char ** argv){
         options.add_options()
             ("c,crop", "boolean flag for cropping to da Vinci Xi frame",cxxopts::value<bool>()->default_value("false"))
             ("d,display", "display extracted frames using OpenCV",cxxopts::value<bool>()->default_value("false"))
+            ("p,prefix", "prefix for output file(s)",cxxopts::value<std::string>())
             ("f,framelist" , "csv file containing frame numbers to extract", cxxopts::value<std::string>())
             ("i,input" , "name of input file", cxxopts::value<std::string>());
         auto cxxopts_result = options.parse(argc,argv);
@@ -175,6 +176,13 @@ int main(int argc, char ** argv){
         display_flag = cxxopts_result["display"].as<bool>();
         framelist_file_name = cxxopts_result["framelist"].as<std::string>(); 
         input_file_name = cxxopts_result["input"].as<std::string>(); 
+
+        // assign output file prefix
+        if (cxxopts_result.count("prefix") != 1) {
+            output_prefix = "frame";
+        } else {
+            output_prefix = cxxopts_result["prefix"].as<std::string>();
+        }
 
     }
     catch(const cxxopts::exceptions::exception &e)
@@ -468,7 +476,7 @@ int main(int argc, char ** argv){
                             }
 
                             // write frame to file using only ffmpeg (lavf, lavc, etc...)
-                            write_avframe_to_file(converted_frame, my_frame_counter);
+                            write_avframe_to_file(converted_frame, my_frame_counter, output_prefix);
 
 
                             // WE CAN ALSO USE OPENCV TO DISPLAY AND SAVE TIF FILE
