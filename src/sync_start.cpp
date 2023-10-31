@@ -26,7 +26,8 @@ enum syncDeviceType{
 	Other
 };
 
-// 
+// class for synchronizable devices
+// TODO: should have a copy constructor to avoid issues in std::vector
 class SyncDevice{	
 private:
 	int socket_fd, status, res, opt, valread;
@@ -34,12 +35,11 @@ private:
 	std::string ip_address, dev_name;
 	syncDeviceType type;
 	bool readyToConnect = false;
-	bool socketInitialized = false;
-	bool deviceConfigured = false;
+	bool deviceInitialized = false;
 	unsigned int port;
-	char buffer[1024] = {0}; // doesn't need delete[] in destructor because it is allocated here
 	struct timeval timeout;
-	char recordCommand[10] = "ping\n";
+	char buffer[1024] = {0}; // doesn't need delete[] in destructor because it is allocated here
+	char recordCommand[512] = {0};
 public:
 	SyncDevice(std::string arg_dev_name, std::string arg_ip, int arg_port, syncDeviceType arg_type){
 		dev_name = arg_dev_name;
@@ -68,43 +68,43 @@ public:
 		}
 		
 		// set timeout
-		timeout.tv_sec = 2;
+		timeout.tv_sec = 1;
 		timeout.tv_usec = 0;
 		
 		// Creating socket file descriptor 
-		std::cout << "creating socket FD" << std::endl;
+		//std::cout << "creating socket FD" << std::endl;
 		if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) 
 		{ 
-			perror("socket failed"); 
-			exit(EXIT_FAILURE); 
+			perror("failed to create socket"); 
+			return -1; 
 		} 
 		
-		std::cout << "setting socket options" << std::endl;
 		// get socket flags
+		//std::cout << "setting socket options" << std::endl;
 		if ((opt = fcntl (socket_fd, F_GETFL, NULL)) < 0) {
+			std::cout << "could not get socket options" << std::endl;
 			return -1;
 		}
 		if (fcntl (socket_fd, F_SETFL, opt | O_NONBLOCK) < 0) {
+			std::cout << "could not set socket to nonblocking" << std::endl;
 			return -1;
 		}
-		setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof timeout);
-		
+		setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof timeout);		
 		address.sin_family = AF_INET; 
 		address.sin_port = htons( port );
 		
-		
 		// configure address
-		std::cout << "configuring server address" << std::endl;
-		if( inet_pton(AF_INET, "192.168.10.50", &address.sin_addr) <=0){
-			printf("INVALID ADDRESS\n");
+		//std::cout << "configuring server address" << std::endl;
+		if( inet_pton(AF_INET, ip_address.c_str(), &address.sin_addr) <=0){
+			printf("invalid address\n");
 			return -1;
 		} 
 
 		// connect to server
-		std::cout << "connecting to server" << std::endl;
+		//std::cout << "connecting to server" << std::endl;
 		if(( status = connect(socket_fd, (struct sockaddr*)&address, sizeof(address))) < 0){
 			if(errno == EINPROGRESS){
-				std::cout << "Connection was in progress, so we will wait..." << std::endl;
+				//std::cout << "Connection was in progress, so we will wait..." << std::endl;
 				fd_set wait_set;
 
 				// make file descriptor set with socket
@@ -120,6 +120,7 @@ public:
 
 		// reset socket flags
 		if (fcntl (socket_fd, F_SETFL, opt) < 0) {
+			std::cout << "could not reset socket flags" << std::endl;
 			return -1;
 		}
 
@@ -131,6 +132,7 @@ public:
 		// select timed out
 		else if (res == 0) {
 			errno = ETIMEDOUT;
+			std::cout << "select timed out" << std::endl;
 			return 1;
 		}
 		// almost finished...
@@ -139,50 +141,82 @@ public:
 
 			// check for errors in socket layer
 			if (getsockopt (socket_fd, SOL_SOCKET, SO_ERROR, &opt, &len) < 0) {
+				std::cout << "socket layer error" << std::endl;
 				return -1;
 			}
 
 			// there was an error
 			if (opt) {
 				errno = opt;
+				std::cout << "error(" << errno << ")" << std::endl;
 				return -1;
 			}
 		}
 		
-		// done
-		socketInitialized = true;
-		return 0;
-	}
-	int Configure(void){
-		
-		if(!socketInitialized){
-			std::cout << "Error: socket not initialized" << std::endl;
+		// SOCKET CONNECTION IS CONFIGURED AND READY TO GO
+		// NOW WE NEED TO CONFIGURE FOR THE SPECIFIC DEVICE TYPE
+		char dev_command[1024] = {0};
+		char dev_resp[1024] = {0};
+		switch(type){
+		case HyperDeck:
+			// set record command for this device type
+			strcpy(recordCommand,"record\n");	
+			
+			// read anything in buffer from initial connection
+			// for HyperDeck this will be system info
+			valread = read(socket_fd,buffer,1024);
+			//printf("valread: %d response: <%s>\n",valread,buffer);
+			memset(buffer,0,1024);  // reset buffer
+
+			// send ping message
+			strcpy(dev_command,"ping\n");
+			send(socket_fd,dev_command,strlen(dev_command),0);
+			valread = read(socket_fd,buffer,1024);			
+			if(valread < 6){
+				std::cout << "ERROR: not enough response chars received: <" << buffer << ">" << std::endl;
+				return -1;
+			}
+			memset(dev_resp,0,1024);
+			strncpy(dev_resp,buffer,6);
+			if(strcmp(dev_resp,"200 ok") != 0){
+				std::cout << "ERROR: bad response from device to ping: " << buffer << std::endl;
+				return -1;
+			}
+			memset(buffer,0,1024);  // reset buffer
+			
+		case Kinematics:
+			// set record command for this device type
+			strcpy(recordCommand,"r\n");
+			
+			// read anything in buffer from initial connection
+			// for Kinematics don't expect to find anything, this will time out
+			valread = read(socket_fd,buffer,1024);
+			
+			break;
+		case Other:
+			strcpy(recordCommand,"record\n");
+			break;
+		default:
+			std::cout << "Undefined initialization behavior" << std::endl;
 			return -1;
 		}
 		
-		std::cout << "reading value" << std::endl;
-		valread = read(socket_fd,buffer,1024);
-		printf("valread: %d response: <%s>\n",valread,buffer);
-		memset(buffer,0,1024);
-
-		for( unsigned int i = 0; i<3; ++i){
-			// send record message
-			send(socket_fd,recordCommand,strlen(recordCommand),0);
-			printf("send record message\n");
-			
-			// capture and display response
-			valread = read(socket_fd,buffer,1024);
-			printf("valread: %d response: <%s>\n",valread,buffer);
-			memset(buffer,0,1024);
-		}
+		// done with initialization
+		deviceInitialized = true;
 		return 0;
 	}
 	int Start(void){
 		return 0;
 	}
-	int Close(){
+	int Close(void){
 		close(socket_fd);
 		return 0;
+	}
+	std::string getName(void){
+		return dev_name;
+	}
+	void printRecordCommand(void){
+		std::cout << recordCommand << std::endl;
 	}
 };
 
@@ -198,6 +232,7 @@ int main(int argc, char const *argv[])
 	bool manual_start_flag, device_active;
 	std::vector<SyncDevice> devices;
 	syncDeviceType device_type;
+	int retval;
 
 	// PARSE COMMAND LINE OPTIONS
 	try
@@ -246,8 +281,9 @@ int main(int argc, char const *argv[])
 			
 			// skip this device if we're not intersted in synchronizing it (i.e. if active == false)
 			device_active = device_details["active"].as<bool>();
-			if(!device_active)
+			if(!device_active){
 				continue;
+			}
 			
 			// extract device info
 			// TODO: add error checking
@@ -257,11 +293,11 @@ int main(int argc, char const *argv[])
 			
 			// map device_type_str from std::string to enum
 			// TODO: is there a better way to bind enum?
-			if(device_type_str.compare("HyperDeck")){
+			if(device_type_str.compare("HyperDeck") == 0){
 				device_type = HyperDeck;
-			} else if(device_type_str.compare("Kinematics")){
+			} else if(device_type_str.compare("Kinematics") == 0){
 				device_type = Kinematics;
-			} else if(device_type_str.compare("Other")){
+			} else if(device_type_str.compare("Other") == 0){
 				device_type = Other;
 			} else {
 				std::cout << "Invalid device type: " << device_type_str << std::endl;
@@ -277,7 +313,7 @@ int main(int argc, char const *argv[])
 
 		// make sure we have some clip definitions in our vector
 		if (!devices.size()) {
-			std::cout << "ERROR: no valid clip definitions found in YAML config file" << std::endl;
+			std::cout << "ERROR: no valid devices found in YAML config file" << std::endl;
 			return -1;
 		}
 	}
@@ -287,12 +323,29 @@ int main(int argc, char const *argv[])
 		return -1;
 	}
 
+	// initialize each device
+	std::cout << std::flush;
+	for( auto &it : devices ){
+		std::cout << "Initializing: " << it.getName() << "... " << std::flush;
+		retval = it.Init();
+		if( retval ){
+			std::cout << "Error initializing " << it.getName() << std::endl;
+			return -1;
+		}
+		std::cout << " done." << std::endl;
+	}
 	
-	
+	// wait for keypress if desired
 	if(manual_start_flag){
 		std::cout << "Press ENTER to synchronize devices" << std::endl;
-        std::cin.get();
-    }
+		std::cin.get();
+	}
+	
+	// send sync pulse(s)
+	for( auto &it : devices ){
+		std::cout << it.getName() << ": ";
+		it.printRecordCommand();
+	}
 	
 	/*
 	SyncDevice* hyperdeck_left = new SyncDevice("192.168.10.50",9993,HyperDeck);
