@@ -40,6 +40,7 @@ private:
 	struct timeval timeout;
 	char buffer[1024] = {0}; // doesn't need delete[] in destructor because it is allocated here
 	char recordCommand[512] = {0};
+	unsigned int recordCommandLength;
 public:
 	SyncDevice(std::string arg_dev_name, std::string arg_ip, int arg_port, syncDeviceType arg_type){
 		dev_name = arg_dev_name;
@@ -57,6 +58,30 @@ public:
 		std::cout << "> IP Address: " << ip_address << std::endl;
 		std::cout << "> Port: " << port << std::endl;
 		return;
+	}
+	void sendRecordCommand(void){
+		send(socket_fd,recordCommand,recordCommandLength,0);
+	}
+	int SendHyperDeckConfigCmd(const char * msg){
+		char dev_command[1024] = {0};
+		char dev_resp[1024] = {0};
+		
+		// send ping message
+		strcpy(dev_command,msg);
+		send(socket_fd,dev_command,strlen(dev_command),0);
+		valread = read(socket_fd,buffer,1024);			
+		if(valread < 6){
+			std::cout << "ERROR: not enough response chars received: <" << buffer << ">" << std::endl;
+			return -1;
+		}
+		memset(dev_resp,0,1024);
+		strncpy(dev_resp,buffer,6);
+		if(strcmp(dev_resp,"200 ok") != 0){
+			std::cout << "ERROR: bad response from device to ping: " << buffer << std::endl;
+			return -1;
+		}
+		memset(buffer,0,1024);  // reset buffer	
+		return 0;
 	}
 	int Init(void){
 		
@@ -152,7 +177,7 @@ public:
 				return -1;
 			}
 		}
-		
+		std::cout << "socket open ";
 		// SOCKET CONNECTION IS CONFIGURED AND READY TO GO
 		// NOW WE NEED TO CONFIGURE FOR THE SPECIFIC DEVICE TYPE
 		char dev_command[1024] = {0};
@@ -160,7 +185,8 @@ public:
 		switch(type){
 		case HyperDeck:
 			// set record command for this device type
-			strcpy(recordCommand,"record\n");	
+			strcpy(recordCommand,"record\n");
+			recordCommandLength = strlen(recordCommand);			
 			
 			// read anything in buffer from initial connection
 			// for HyperDeck this will be system info
@@ -169,24 +195,28 @@ public:
 			memset(buffer,0,1024);  // reset buffer
 
 			// send ping message
-			strcpy(dev_command,"ping\n");
-			send(socket_fd,dev_command,strlen(dev_command),0);
-			valread = read(socket_fd,buffer,1024);			
-			if(valread < 6){
-				std::cout << "ERROR: not enough response chars received: <" << buffer << ">" << std::endl;
+			if( SendHyperDeckConfigCmd("ping\n") != 0){
+				std::cout << "ERROR: failed ping." << std::endl;
 				return -1;
 			}
-			memset(dev_resp,0,1024);
-			strncpy(dev_resp,buffer,6);
-			if(strcmp(dev_resp,"200 ok") != 0){
-				std::cout << "ERROR: bad response from device to ping: " << buffer << std::endl;
+			
+			// enable remote
+			if( SendHyperDeckConfigCmd("remote: enable: true\n") != 0){
+				std::cout << "ERROR: QUITTING" << std::endl;
 				return -1;
 			}
-			memset(buffer,0,1024);  // reset buffer
+			
+			// select slot 1
+			if( SendHyperDeckConfigCmd("slot select: slot id: 1\n") != 0){
+				std::cout << "ERROR: QUITTING" << std::endl;
+				return -1;
+			}
+		break;
 			
 		case Kinematics:
 			// set record command for this device type
 			strcpy(recordCommand,"r\n");
+			recordCommandLength = strlen(recordCommand);
 			
 			// read anything in buffer from initial connection
 			// for Kinematics don't expect to find anything, this will time out
@@ -195,6 +225,7 @@ public:
 			break;
 		case Other:
 			strcpy(recordCommand,"record\n");
+			recordCommandLength = strlen(recordCommand);
 			break;
 		default:
 			std::cout << "Undefined initialization behavior" << std::endl;
@@ -214,9 +245,6 @@ public:
 	}
 	std::string getName(void){
 		return dev_name;
-	}
-	void printRecordCommand(void){
-		std::cout << recordCommand << std::endl;
 	}
 };
 
@@ -344,7 +372,7 @@ int main(int argc, char const *argv[])
 	// send sync pulse(s)
 	for( auto &it : devices ){
 		std::cout << it.getName() << ": ";
-		it.printRecordCommand();
+		it.sendRecordCommand();
 	}
 	
 	/*

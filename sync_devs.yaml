@@ -11,7 +11,7 @@ devices:
     ip: 192.168.10.60
     port: 9993
   kinematics_pc:
-    active: true
+    active: false
     type: Kinematics
     ip: 192.168.10.70
     port: 9993
