@@ -22,14 +22,18 @@ vtiff: vtiff.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_TIFF)
 	rm -f vtiff.o
 	
-sync_start: sync_start.o
+sync_start: SyncDevice.o sync_start.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB_PARAMS) $(LD_FLAGS_SYNC)
+	rm -f SyncDevice.o
 	rm -f sync_start.o
 
 vclip.o: ./src/vclip.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
 
 vtiff.o: ./src/vtiff.cpp
+	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
+
+SyncDevice.o: ./src/SyncDevice.cpp
 	$(CC) $(CFLAGS) $(INC_SYS_PARAMS) $(INC_PARAMS) -o $@ -c $<
 
 sync_start.o: ./src/sync_start.cpp
