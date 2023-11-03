@@ -1,5 +1,8 @@
 // Simple command-line program to send TCP packets over LAN
 // to synchronize data collection devices
+//
+// Author: Mike Kokko
+// Updated: 02-Nov-2023
 
 #include "SyncDevice.h"
 #include <cxxopts.hpp>  		// https://www.github.com/jarro2783/cxxopts
