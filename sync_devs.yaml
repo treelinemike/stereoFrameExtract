@@ -1,0 +1,17 @@
+manual_start: true
+devices:
+  hyperdeck_left:
+    active: true
+    type: HyperDeck
+    ip: 192.168.10.50
+    port: 9993
+  hyperdeck_right:
+    active: true
+    type: HyperDeck
+    ip: 192.168.10.60
+    port: 9993
+  kinematics_pc:
+    active: true
+    type: Kinematics
+    ip: 192.168.10.70
+    port: 9993
