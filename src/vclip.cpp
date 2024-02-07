@@ -261,11 +261,11 @@ int main(int argc, char** argv) {
 			codec_params->codec_type,
 			codec_params->codec_id);
 
-		// determine whether this is v210 or FFV1 encoded video
-		if (codec_params->codec_type == AVMEDIA_TYPE_VIDEO && (codec_params->codec_id == AV_CODEC_ID_V210 || codec_params->codec_id == AV_CODEC_ID_FFV1)) {
-			//std::cout << "FOUND v210 or FFV1 ENCODED VIDEO" << std::endl;
+		// determine whether this is v210, FFV1, or prores encoded video
+		if (codec_params->codec_type == AVMEDIA_TYPE_VIDEO && (codec_params->codec_id == AV_CODEC_ID_V210 || codec_params->codec_id == AV_CODEC_ID_FFV1 || codec_params->codec_id == AV_CODEC_ID_PRORES)) {
+			//std::cout << "FOUND v210, FFV1, OR PRORES ENCODED VIDEO" << std::endl;
 			if (found_video_stream) {
-				std::cout << "ERROR: MORE THAN ONE v210 or FFV1 VIDEO STREAM FOUND!" << std::endl;
+				std::cout << "ERROR: MORE THAN ONE v210, FFV1, OR PRORES VIDEO STREAM FOUND!" << std::endl;
 				return -1;
 			}
 			else {
@@ -277,7 +277,7 @@ int main(int argc, char** argv) {
 
 	// error out if we didn't find v210 or FFV1 video
 	if (!found_video_stream) {
-		std::cout << "ERROR: DID NOT FIND A V210 OR FFV1 VIDEO STREAM" << std::endl;
+		std::cout << "ERROR: DID NOT FIND A V210, FFV1, OR PRORES VIDEO STREAM" << std::endl;
 		return -1;
 	}
 
@@ -293,7 +293,8 @@ int main(int argc, char** argv) {
 
 	// figure out transcoding, etc.
 	// note: FFV1->FFV1 needs to be transcoded because we can't transmux packets starting from a non-keyframe
-	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : AV_CODEC_ID_V210;
+	//       PRORES->PRORES probably needs to be transcoded too...
+	outcodec_id = compress_flag ? AV_CODEC_ID_FFV1 : codec_params->codec_id;
 	if ((codec_params->codec_id == AV_CODEC_ID_V210) && (!compress_flag) && (!framecrop_flag)) {
 		transcode_flag = false;
 	}
