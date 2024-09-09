@@ -78,7 +78,7 @@ public:
 		type{ arg_type },
 		readyToConnect{ true } {}
 	~SyncDevice() {
-		Close();
+		// do nothing
 	};
 
 	int Close(void);

@@ -121,6 +121,9 @@ int SyncDevice::Init(void) {
 		return 1;
 	}
 
+	// set options
+	setsockopt(ConnectSocket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(struct timeval));
+
 	// Connect to server.
 	iResult = connect(ConnectSocket, ptr->ai_addr, (int)ptr->ai_addrlen);
 	if (iResult == SOCKET_ERROR) {
@@ -128,11 +131,11 @@ int SyncDevice::Init(void) {
 		ConnectSocket = INVALID_SOCKET;
 	}
 
+	
 	// Should really try the next address returned by getaddrinfo
 	// if the connect call failed
 	// But for this simple example we just free the resources
 	// returned by getaddrinfo and print an error message
-
 	freeaddrinfo(result);
 
 	if (ConnectSocket == INVALID_SOCKET) {
@@ -140,7 +143,6 @@ int SyncDevice::Init(void) {
 		WSACleanup();
 		return 1;
 	}
-
 
 	// SOCKET CONNECTION IS CONFIGURED AND READY TO GO
 	// NOW WE NEED TO CONFIGURE FOR THE SPECIFIC DEVICE TYPE
@@ -157,6 +159,7 @@ int SyncDevice::Init(void) {
 		do {
 			iResult = recv(ConnectSocket, buffer, 1024, 0);
 		} while (iResult > 0);
+
 
 		//printf("valread: %d response: <%s>\n",valread,buffer);
 		memset(buffer, 0, 1024);  // reset buffer

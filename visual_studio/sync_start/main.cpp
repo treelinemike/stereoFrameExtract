@@ -102,7 +102,7 @@ int main(int argc, char const* argv[])
 			}
 
 			// create a device
-			std::cout << "Ading " << device_ip << ":" << device_port << " as " << device_name << std::endl;
+			std::cout << "Adding " << device_ip << ":" << device_port << " as " << device_name << std::endl;
 			SyncDevice single_device(device_name, device_ip, device_port, device_type); // on stack (not heap), will be automatically freed 
 			devices.push_back(single_device); // object is *copied* into vector
 		}
@@ -125,6 +125,7 @@ int main(int argc, char const* argv[])
 	for (auto& it : devices) {
 		std::cout << "Initializing: " << it.getName() << "... " << std::flush;
 		retval = it.Init();
+		std::cout << "Device initialized" << std::endl;
 		if (retval) {
 			std::cout << "Error initializing " << it.getName() << std::endl;
 			return -1;
